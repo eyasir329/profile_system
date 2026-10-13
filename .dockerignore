@@ -1,0 +1,42 @@
+# Files that should NOT be sent to the Docker daemon when building.
+# Smaller build context = faster builds, and prevents accidentally
+# baking secrets (like .env) into the image.
+
+# Local config (may contain real passwords)
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Uploaded user content - never bake user photos into the image
+uploads/
+public/uploads/profiles/
+
+# Local logs / scratch
+*.log
+*.bak
+
+# The MariaDB data dir (in case anyone mounts the project as a volume)
+db_data/
+
+# Docker compose artefacts
+docker-compose.override.yml
+
+# Front-end toolchain: the image only needs the built files in public/assets
+node_modules
+resources
+package.json
+package-lock.json

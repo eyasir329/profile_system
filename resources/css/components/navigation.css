@@ -1,0 +1,162 @@
+/* Navigation: top bar, dropdown menus, side navigation, segmented switch. */
+@layer components {
+  /* ---- Top bar ---- */
+  .navbar {
+    @apply sticky top-0 z-40 border-b border-navbar-line;
+    background: color-mix(in oklch, var(--navbar) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px);
+  }
+  .navbar-inner {
+    @apply mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:px-6;
+  }
+  .brand {
+    @apply mr-4 flex items-center gap-2.5 text-[0.9375rem] font-semibold text-foreground no-underline;
+  }
+  .brand-mark {
+    @apply flex size-7 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground;
+    font-family: var(--font-serif);
+  }
+
+  .nav-links {
+    @apply hidden items-center gap-1 md:flex;
+  }
+  .nav-link {
+    @apply relative flex h-14 items-center px-3 text-sm font-medium text-muted-foreground-2 no-underline hover:text-foreground;
+  }
+  .nav-link[aria-current="page"] {
+    @apply text-foreground;
+  }
+  /* The current page is marked by a rule on the bar's bottom edge. */
+  .nav-link[aria-current="page"]::after {
+    content: "";
+    @apply absolute inset-x-3 -bottom-px h-0.5 bg-primary;
+  }
+
+  .nav-end {
+    @apply ml-auto flex items-center gap-1.5;
+  }
+  .nav-toggle {
+    @apply md:hidden;
+  }
+
+  /* Small screens: the links drop down under the bar. */
+  .nav-drawer {
+    @apply border-t border-navbar-line bg-navbar px-4 pt-2 pb-4 md:hidden;
+  }
+  .nav-drawer a,
+  .nav-drawer button.nav-drawer-item {
+    @apply flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-[0.9375rem] font-medium text-muted-foreground-2 no-underline;
+  }
+  .nav-drawer a:hover,
+  .nav-drawer button.nav-drawer-item:hover {
+    @apply bg-muted-hover text-foreground;
+  }
+  .nav-drawer a[aria-current="page"] {
+    @apply bg-muted text-foreground;
+  }
+  .nav-drawer-label {
+    @apply mt-3 mb-1 border-t border-navbar-line px-3 pt-3 text-xs font-medium text-muted-foreground-1;
+  }
+
+  /* ---- Dropdown menu (Alpine: x-data="dropdown") ---- */
+  .menu-wrap {
+    @apply relative;
+  }
+  .menu-trigger {
+    @apply flex h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm font-medium text-foreground hover:bg-muted-hover;
+  }
+  .menu-trigger .caret {
+    @apply size-3.5 text-muted-foreground-1;
+    transition: transform 120ms;
+  }
+  .menu-trigger[aria-expanded="true"] .caret {
+    transform: rotate(180deg);
+  }
+  .menu {
+    @apply absolute right-0 z-50 mt-1.5 min-w-52 rounded-lg border border-dropdown-line bg-dropdown p-1;
+    border-color: var(--color-line-2);
+    box-shadow: var(--shadow-pop);
+  }
+  .dark .menu {
+    border-color: var(--color-gray-700);
+  }
+  .menu-label {
+    @apply px-2.5 pt-2 pb-1 text-xs text-muted-foreground-1;
+  }
+  .menu-item {
+    @apply flex w-full cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-sm text-foreground no-underline hover:bg-muted-hover;
+  }
+  .menu-item:focus-visible {
+    @apply bg-muted-hover outline-none;
+  }
+  .menu-item .icon {
+    @apply text-muted-foreground-1;
+  }
+  .menu-item[aria-checked="true"] {
+    @apply font-medium;
+  }
+  .menu-item .check-mark {
+    @apply ml-auto text-primary;
+  }
+  .menu-sep {
+    @apply -mx-1 my-1 border-t border-layer-line;
+  }
+
+  /* ---- Side navigation: settings tabs, profile section list ---- */
+  .side-nav {
+    @apply flex min-w-0 gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0;
+    scrollbar-width: none;
+  }
+  .side-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .side-nav-item {
+    @apply flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground-2 no-underline hover:bg-muted-hover hover:text-foreground;
+  }
+  .side-nav-item[aria-current="page"],
+  .side-nav-item[aria-current="true"] {
+    @apply bg-surface text-foreground;
+  }
+  .dark .side-nav-item[aria-current="page"],
+  .dark .side-nav-item[aria-current="true"] {
+    @apply bg-gray-800;
+  }
+  .side-nav-item.is-danger {
+    @apply text-danger;
+  }
+  .side-nav-count {
+    @apply ml-auto pl-3 text-xs font-normal text-muted-foreground-1 tabular-nums;
+  }
+  .side-nav-title {
+    @apply mb-2 hidden px-3 text-xs font-medium text-muted-foreground-1 lg:block;
+  }
+
+  /* ---- Segmented switch: two or three mutually exclusive views ---- */
+  .segmented {
+    @apply inline-flex rounded-md border bg-layer p-0.5;
+    border-color: var(--color-line-3);
+  }
+  .dark .segmented {
+    border-color: var(--color-gray-700);
+  }
+  .segmented a {
+    @apply flex h-[1.6875rem] items-center rounded-sm px-2.5 text-[0.8125rem] font-medium text-muted-foreground-2 no-underline hover:text-foreground;
+  }
+  .segmented a[aria-current="true"] {
+    @apply bg-surface text-foreground;
+  }
+  .dark .segmented a[aria-current="true"] {
+    @apply bg-gray-700;
+  }
+
+  /* ---- Footer ---- */
+  .site-footer {
+    @apply mt-auto border-t border-layer-line;
+  }
+  .site-footer-inner {
+    @apply mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-5 text-[0.8125rem] text-muted-foreground-1 sm:px-6;
+  }
+  .site-footer a {
+    @apply text-muted-foreground-2 decoration-transparent hover:text-foreground hover:decoration-current;
+  }
+}

@@ -1,0 +1,119 @@
+/* Element defaults. Anything with a class name lives in components/. */
+@layer base {
+  html {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    scroll-padding-top: 5.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply flex min-h-dvh flex-col;
+  }
+  main {
+    @apply flex-1 outline-none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Links inside running text. Buttons and nav items opt out with their own classes. */
+  a {
+    @apply text-primary underline decoration-primary/30 underline-offset-[3px];
+    text-decoration-thickness: 1px;
+  }
+  a:hover {
+    @apply decoration-primary;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+  /* Alpine: keep elements hidden until it has initialised them. */
+  [x-cloak] {
+    display: none !important;
+  }
+
+  code,
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply sr-only rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground no-underline;
+  }
+  .skip-link:focus {
+    @apply not-sr-only fixed top-2 left-2 z-[100];
+  }
+
+  /* Page widths. Every page body is wrapped in exactly one of these. */
+  .page,
+  .page-wide,
+  .page-narrow {
+    @apply mx-auto w-full px-4 py-8 sm:px-6 sm:py-10;
+  }
+  .page {
+    @apply max-w-5xl;
+  }
+  .page-wide {
+    @apply max-w-7xl;
+  }
+  .page-narrow {
+    @apply max-w-[27rem] sm:py-16;
+  }
+
+  /* Page heading block: title, one line of context, optional actions. */
+  .page-header {
+    @apply mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4;
+  }
+  .page-title {
+    @apply text-[1.75rem] leading-tight font-semibold tracking-[-0.01em];
+    font-family: var(--font-serif);
+    font-variation-settings: "opsz" 32;
+  }
+  .page-desc {
+    @apply mt-1.5 max-w-[65ch] text-muted-foreground-2;
+  }
+  .back-link {
+    @apply mb-5 inline-flex items-center gap-1 text-sm text-muted-foreground-2 no-underline hover:text-foreground;
+  }
+
+  .muted {
+    @apply text-muted-foreground-2;
+  }
+  .faint {
+    @apply text-muted-foreground-1;
+  }
+
+  .icon {
+    @apply inline-block size-4 shrink-0;
+  }
+}

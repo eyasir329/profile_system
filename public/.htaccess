@@ -1,0 +1,7 @@
+# Top-level .htaccess.
+# Public profile (formerly /u/<username>) was removed. The app is now
+# private: only authenticated users can reach any profile data, and
+# there is no anonymous route for it.
+#
+# Disable directory listing for safety.
+Options -Indexes

@@ -1,0 +1,56 @@
+/*
+ * Buttons. One base class plus one variant; sizes are optional.
+ *   <button class="btn btn-primary">Save</button>
+ *   <a class="btn btn-secondary btn-sm" href="...">View</a>
+ * Works on <button> and <a>. Disabled state comes from the attribute.
+ */
+@layer components {
+  .btn {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-transparent px-4 text-sm font-medium whitespace-nowrap no-underline select-none;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    @apply pointer-events-none opacity-50;
+  }
+  .btn:active {
+    transform: translateY(0.5px);
+  }
+  .btn .icon {
+    @apply -mx-0.5;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover;
+  }
+  .btn-secondary {
+    @apply border-layer-line bg-layer text-foreground hover:bg-layer-hover;
+    border-color: var(--color-line-3);
+  }
+  .dark .btn-secondary {
+    border-color: var(--color-gray-700);
+  }
+  .btn-ghost {
+    @apply text-muted-foreground-2 hover:bg-muted-hover hover:text-foreground;
+  }
+  .btn-danger {
+    @apply bg-destructive text-white hover:bg-destructive-hover;
+  }
+  .btn-danger-ghost {
+    @apply text-danger hover:bg-danger-soft;
+  }
+
+  .btn-sm {
+    @apply h-8 gap-1.5 px-3 text-[0.8125rem];
+  }
+  .btn-lg {
+    @apply h-11 px-5 text-[0.9375rem];
+  }
+  .btn-block {
+    @apply w-full;
+  }
+  /* Square, icon-only. Always give it an aria-label. */
+  .btn-icon {
+    @apply size-8 px-0;
+  }
+}

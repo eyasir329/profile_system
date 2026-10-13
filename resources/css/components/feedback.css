@@ -1,0 +1,93 @@
+/* Status and feedback: alerts, badges, role chips, progress, empty states. */
+@layer components {
+  /*
+   * Alert: an inline message that belongs to the page (form errors, account
+   * state). Transient confirmations are toasts instead (overlay.css).
+   */
+  .alert {
+    @apply mb-5 flex items-start gap-3 rounded-md border px-4 py-3 text-sm;
+  }
+  .alert > .icon {
+    @apply mt-[0.2rem];
+  }
+  .alert > div {
+    @apply min-w-0 flex-1;
+  }
+  .alert-error {
+    @apply border-danger-line bg-danger-soft text-danger;
+  }
+  .alert-success {
+    @apply border-success-line bg-success-soft text-success;
+  }
+  .alert-warning {
+    @apply border-warning-line bg-warning-soft text-warning;
+  }
+  .alert-info {
+    @apply border-info-line bg-info-soft text-info;
+  }
+
+  /* Badge: a short state word. Neutral unless the state itself matters. */
+  .badge {
+    @apply inline-flex h-[1.375rem] items-center rounded-sm border border-layer-line bg-muted px-1.5 text-xs leading-none font-medium whitespace-nowrap text-muted-foreground-2;
+  }
+  .badge-success {
+    @apply border-success-line bg-success-soft text-success;
+  }
+  .badge-warning {
+    @apply border-warning-line bg-warning-soft text-warning;
+  }
+  .badge-danger {
+    @apply border-danger-line bg-danger-soft text-danger;
+  }
+
+  /* Role: a coloured dot and the role name. The dot is the only use of the role colours. */
+  .role {
+    @apply inline-flex items-center gap-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-foreground;
+  }
+  .role::before {
+    content: "";
+    @apply size-2 rounded-full bg-muted-foreground;
+  }
+  .role-admin::before {
+    @apply bg-role-admin;
+  }
+  .role-teacher::before {
+    @apply bg-role-teacher;
+  }
+  .role-student::before {
+    @apply bg-role-student;
+  }
+  .role-list {
+    @apply inline-flex flex-wrap items-center gap-x-3 gap-y-1;
+  }
+
+  .progress {
+    @apply h-1.5 w-full overflow-hidden rounded-full bg-surface;
+  }
+  .progress-bar {
+    @apply block h-full rounded-full bg-primary;
+    transition: width 300ms ease-out;
+  }
+
+  /* Empty state: says what is missing and offers the next step. */
+  .empty {
+    @apply rounded-lg border border-dashed px-6 py-12 text-center;
+    border-color: var(--color-line-3);
+  }
+  .dark .empty {
+    border-color: var(--color-gray-700);
+  }
+  .empty-title {
+    @apply text-base font-semibold;
+  }
+  .empty p {
+    @apply mx-auto mt-1 max-w-[46ch] text-sm text-muted-foreground-2;
+  }
+  .empty .btn {
+    @apply mt-5;
+  }
+
+  .kbd {
+    @apply rounded-sm border border-layer-line bg-muted px-1 py-px text-[0.6875rem] text-muted-foreground-2;
+  }
+}

@@ -1,0 +1,44 @@
+/*
+ * Profile System stylesheet (source).
+ *
+ * Built with Tailwind CSS v4 into public/assets/css/app.css:
+ *   npm run build      one-off, minified
+ *   npm run dev        watch mode
+ *
+ * Order matters:
+ *   1. Tailwind
+ *   2. Preline's theme.css: the semantic colour tokens (bg-layer,
+ *      text-foreground, bg-primary, ...) and their light / dark values
+ *   3. theme.css: our palette, fonts and radii, overriding Preline's defaults
+ *   4. base + components: the small set of named classes the PHP templates
+ *      and the profile editor share (see docs/COMPONENTS.md)
+ *
+ * Templates use Tailwind utilities for layout and these component classes
+ * for anything that repeats (buttons, fields, badges, ...).
+ */
+@import "tailwindcss";
+@plugin "@tailwindcss/forms" {
+  strategy: "base";
+}
+
+/* Scan the PHP templates and our own scripts for class names. */
+@source "../../public";
+@source "../../src";
+@source "../js";
+
+/* Dark mode follows the `dark` class on <html> (set in header.php). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@import "preline/theme.css";
+@import "./theme.css";
+@import "./fonts.css";
+@import "./base.css";
+
+@import "./components/button.css";
+@import "./components/form.css";
+@import "./components/surface.css";
+@import "./components/feedback.css";
+@import "./components/navigation.css";
+@import "./components/data.css";
+@import "./components/overlay.css";
+@import "./components/profile.css";

@@ -1,0 +1,64 @@
+/*
+ * Surfaces.
+ *
+ * .card     a bordered white panel. Used for forms and self-contained
+ *           summaries. Never nested.
+ * .section  an unboxed block with a ruled heading. Used for long reading
+ *           pages (the profile) where boxes around everything would be noise.
+ */
+@layer components {
+  .card {
+    @apply rounded-lg border border-card-line bg-card p-5 sm:p-6;
+  }
+  .card + .card {
+    @apply mt-5;
+  }
+  .card-head {
+    @apply mb-4 flex items-baseline justify-between gap-4;
+  }
+  .card-title {
+    @apply flex flex-wrap items-center gap-2 text-base leading-snug font-semibold;
+  }
+  .card-desc {
+    @apply mt-1 mb-5 max-w-[62ch] text-sm text-muted-foreground-2;
+  }
+  .card-link {
+    @apply text-[0.8125rem] font-medium;
+  }
+  .card-danger {
+    @apply border-danger-line;
+  }
+  .card-danger .card-title {
+    @apply text-danger;
+  }
+
+  .section {
+    @apply mt-10 scroll-mt-24 first:mt-0;
+  }
+  .section-head {
+    @apply mb-1 flex items-end justify-between gap-4 border-b border-layer-line pb-3;
+  }
+  .section-title {
+    @apply flex flex-wrap items-baseline gap-x-2.5 text-lg leading-snug font-semibold;
+  }
+  .section-count {
+    @apply text-[0.8125rem] font-normal text-muted-foreground-1;
+  }
+  .section-desc {
+    @apply mt-0.5 text-sm text-muted-foreground-2;
+  }
+
+  /* A row inside a danger card: explanation left, action right. */
+  .action-row {
+    @apply flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-layer-line py-4 first-of-type:border-t-0 first-of-type:pt-0 last:pb-0;
+  }
+  .action-row > div {
+    @apply min-w-0 flex-1 basis-64;
+  }
+  .action-row strong {
+    @apply block text-sm font-semibold;
+  }
+  .action-row p {
+    @apply mt-0.5 text-sm text-muted-foreground-2;
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "profile-system",
+  "private": true,
+  "description": "Front-end build for Profile System: Tailwind CSS v4 + Alpine.js, themed with Preline UI tokens.",
+  "scripts": {
+    "build": "npm run build:css && npm run build:js && npm run build:fonts",
+    "build:css": "tailwindcss -i resources/css/app.css -o public/assets/css/app.css --minify",
+    "build:js": "esbuild resources/js/app.js --bundle --minify --target=es2020 --outfile=public/assets/js/app.js",
+    "build:fonts": "node resources/copy-fonts.mjs",
+    "dev": "npm run build:fonts && (npm run dev:css & npm run dev:js)",
+    "dev:css": "tailwindcss -i resources/css/app.css -o public/assets/css/app.css --watch",
+    "dev:js": "esbuild resources/js/app.js --bundle --sourcemap=inline --target=es2020 --outfile=public/assets/js/app.js --watch"
+  },
+  "devDependencies": {
+    "@fontsource-variable/source-serif-4": "5.3.1",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@tailwindcss/cli": "4.3.3",
+    "@tailwindcss/forms": "0.5.11",
+    "alpinejs": "3.17.4",
+    "esbuild": "0.28.2",
+    "preline": "5.0.0",
+    "tailwindcss": "4.3.3"
+  }
+}

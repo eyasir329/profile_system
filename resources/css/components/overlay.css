@@ -1,0 +1,73 @@
+/* Things that float above the page: the confirm dialog and toasts. */
+@layer components {
+  /* ---- Modal: a native <dialog>, opened with showModal() ---- */
+  .modal {
+    @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-overlay-line bg-overlay p-0 text-foreground;
+    box-shadow: var(--shadow-pop);
+  }
+  .modal::backdrop {
+    background: oklch(0.2 0.01 60 / 0.45);
+  }
+  .modal[open] {
+    animation: modal-in 140ms ease-out;
+  }
+  .modal-body {
+    @apply px-6 pt-6 pb-2;
+  }
+  .modal-title {
+    @apply text-base font-semibold;
+  }
+  .modal-text {
+    @apply mt-1.5 text-sm text-muted-foreground-2;
+  }
+  .modal-actions {
+    @apply flex justify-end gap-2 px-6 pt-4 pb-5;
+  }
+  @keyframes modal-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.985);
+    }
+  }
+
+  /*
+   * Toasts sit bottom centre. Not bottom right: that is where every form
+   * on this site puts its Save button.
+   */
+  .toast-region {
+    @apply pointer-events-none fixed inset-x-4 bottom-4 z-[70] flex flex-col items-stretch gap-2 sm:inset-x-auto sm:bottom-5 sm:left-1/2 sm:w-[24rem] sm:-translate-x-1/2;
+  }
+  .toast {
+    @apply pointer-events-auto flex items-start gap-3 rounded-lg border bg-gray-900 py-3 pr-2 pl-4 text-sm text-gray-50;
+    border-color: var(--color-gray-800);
+    box-shadow: var(--shadow-pop);
+  }
+  .dark .toast {
+    @apply bg-gray-800;
+    border-color: var(--color-gray-700);
+  }
+  .toast-mark {
+    @apply mt-[0.4rem] size-2 shrink-0 rounded-full bg-gray-400;
+  }
+  .toast.is-success .toast-mark {
+    background: oklch(0.75 0.15 155);
+  }
+  .toast.is-error .toast-mark {
+    background: oklch(0.7 0.18 25);
+  }
+  .toast.is-warn .toast-mark {
+    background: oklch(0.8 0.14 80);
+  }
+  .toast-msg {
+    @apply min-w-0 flex-1 py-px;
+  }
+  .toast-msg strong {
+    @apply block font-semibold;
+  }
+  .toast-action {
+    @apply shrink-0 cursor-pointer rounded-sm px-2 py-0.5 text-[0.8125rem] font-semibold text-primary-300 underline underline-offset-2 hover:text-primary-200;
+  }
+  .toast-close {
+    @apply flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-sm text-gray-400 hover:bg-gray-700 hover:text-gray-50;
+  }
+}

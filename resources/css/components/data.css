@@ -1,0 +1,248 @@
+/* Data display: avatars, tables, fact lists, toolbars, copy boxes. */
+@layer components {
+  /* ---- Avatar: photo or initial. Sizes: sm 28, default 36, lg 56, xl 88 ---- */
+  .avatar {
+    @apply inline-flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface object-cover text-sm font-semibold text-muted-foreground-2 select-none;
+  }
+  .dark .avatar {
+    @apply bg-gray-800;
+  }
+  .avatar-sm {
+    @apply size-7 text-xs;
+  }
+  .avatar-lg {
+    @apply size-14 text-xl;
+  }
+  .avatar-xl {
+    @apply size-[5.5rem] text-3xl;
+    font-family: var(--font-serif);
+  }
+
+  /* ---- Person: avatar + name + secondary line, usually a link ---- */
+  .person {
+    @apply flex min-w-0 items-center gap-3 text-foreground no-underline;
+  }
+  .person-name {
+    @apply block truncate font-medium;
+  }
+  a.person:hover .person-name {
+    @apply text-primary underline underline-offset-[3px];
+  }
+  .person-sub {
+    @apply block truncate text-[0.8125rem] font-normal text-muted-foreground-1;
+  }
+
+  /* ---- Toolbar: the filter row above a table ---- */
+  .toolbar {
+    @apply mb-4 flex flex-wrap items-center gap-2;
+  }
+  .toolbar .grow {
+    @apply min-w-56 flex-1;
+  }
+  .toolbar .select {
+    @apply w-auto;
+  }
+  .search-field {
+    @apply relative;
+  }
+  .search-field > .icon {
+    @apply pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground-1;
+  }
+  .search-field > .input {
+    @apply pl-9;
+  }
+
+  /* ---- Table ---- */
+  .table-wrap {
+    @apply overflow-hidden rounded-lg border border-card-line bg-card;
+  }
+  .table-scroll {
+    @apply overflow-x-auto;
+  }
+  .table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .table th,
+  .table td {
+    @apply border-b border-table-line px-4 py-3 align-middle;
+  }
+  .table thead th {
+    @apply bg-muted py-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground-2;
+  }
+  .table tbody th {
+    @apply font-normal;
+  }
+  .table tbody tr:last-child > * {
+    @apply border-b-0;
+  }
+  .table tbody tr:hover > * {
+    @apply bg-layer-hover;
+  }
+  .table .is-deactivated .person {
+    @apply opacity-60;
+  }
+  .table .col-actions {
+    @apply text-right whitespace-nowrap;
+  }
+  .table .col-actions .btn + .btn {
+    @apply ml-1;
+  }
+  .table .nowrap {
+    @apply whitespace-nowrap;
+  }
+  .table .pre {
+    @apply min-w-48 whitespace-pre-line;
+  }
+  .table .num {
+    @apply tabular-nums;
+  }
+  .sort-link {
+    @apply inline-flex items-center gap-1 text-inherit no-underline hover:text-foreground;
+  }
+  th[aria-sort] .sort-link {
+    @apply text-foreground;
+  }
+
+  /* Completion meter in a table cell. */
+  .meter {
+    @apply flex w-28 items-center gap-2.5;
+  }
+  .meter-text {
+    @apply w-9 shrink-0 text-right text-[0.8125rem] text-muted-foreground-2 tabular-nums;
+  }
+
+  /*
+   * Sheet: the wide "every field" table. The first column stays pinned
+   * while the rest scrolls; .is-full makes the frame fill the window.
+   */
+  .sheet-frame.is-full {
+    @apply fixed inset-0 z-[60] flex flex-col rounded-none border-0;
+  }
+  .sheet-bar {
+    @apply hidden items-center gap-3 border-b border-layer-line px-4 py-2.5 text-sm;
+  }
+  .sheet-frame.is-full .sheet-bar {
+    @apply flex;
+  }
+  .sheet-bar .btn {
+    @apply ml-auto;
+  }
+  .sheet-scroll {
+    @apply max-h-[70vh] overflow-auto outline-none;
+  }
+  .sheet-frame.is-full .sheet-scroll {
+    @apply max-h-none flex-1;
+  }
+  .sheet th,
+  .sheet td {
+    @apply border-r border-table-line py-2.5 align-top text-[0.8125rem];
+  }
+  .sheet thead th {
+    @apply sticky top-0 z-10;
+  }
+  .sheet .pin {
+    @apply sticky left-0 z-[5] bg-card;
+    box-shadow: 1px 0 0 var(--table-line);
+  }
+  .sheet thead .pin {
+    @apply z-20 bg-muted;
+  }
+  .sheet tbody tr:hover .pin {
+    @apply bg-layer-hover;
+  }
+  .sheet .wide {
+    @apply min-w-72;
+  }
+  .sheet .cell-list {
+    @apply space-y-1.5;
+  }
+  .sheet .cell-list strong {
+    @apply font-medium;
+  }
+  .sheet .cell-extra {
+    @apply block text-muted-foreground-1;
+  }
+  html.has-sheet-full {
+    @apply overflow-hidden;
+  }
+
+  /* ---- Card list: the small-screen stand-in for a table ---- */
+  .card-list {
+    @apply divide-y divide-table-line;
+  }
+  .card-list-item {
+    @apply flex flex-col gap-3 p-4;
+  }
+  .card-list-item.is-deactivated .person {
+    @apply opacity-60;
+  }
+  .card-list-meta {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.8125rem] text-muted-foreground-2;
+  }
+
+  /* ---- Facts: label / value pairs ---- */
+  .facts {
+    @apply grid gap-x-8 sm:grid-cols-2;
+  }
+  .facts > div {
+    @apply flex items-baseline justify-between gap-4 border-b border-layer-line py-2.5 text-sm;
+  }
+  .facts dt {
+    @apply shrink-0 text-muted-foreground-2;
+  }
+  .facts dd {
+    @apply flex min-w-0 flex-wrap items-center justify-end gap-2 text-right break-words;
+  }
+  .facts.is-single {
+    @apply sm:grid-cols-1;
+  }
+  /* Stacked variant for long values (addresses, thesis titles). */
+  .facts.is-stacked > div {
+    @apply block;
+  }
+  .facts.is-stacked dt {
+    @apply text-[0.8125rem];
+  }
+  .facts.is-stacked dd {
+    @apply mt-0.5 justify-start text-left whitespace-pre-line;
+  }
+
+  /* ---- Copy box: a value with a copy button (invite links, setup keys) ---- */
+  .copy-box {
+    @apply flex items-stretch gap-2;
+  }
+  .copy-box .value {
+    @apply min-w-0 flex-1 rounded-md border border-layer-line bg-muted px-3 py-2 text-[0.8125rem] break-all select-all;
+    font-family: var(--font-mono);
+  }
+  .copy-box .btn {
+    @apply h-auto min-h-9 shrink-0;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  /* Numbered steps (two-factor setup, "how accounts work"). */
+  .steps {
+    @apply space-y-5;
+    counter-reset: step;
+  }
+  .steps > li {
+    @apply relative pl-10;
+    counter-increment: step;
+  }
+  .steps > li::before {
+    content: counter(step);
+    @apply absolute top-0 left-0 flex size-6 items-center justify-center rounded-full border text-xs font-semibold text-muted-foreground-2 tabular-nums;
+    border-color: var(--color-line-3);
+  }
+  .steps > li > strong {
+    @apply block text-sm font-semibold;
+  }
+  .steps > li > span,
+  .steps > li > p {
+    @apply mt-0.5 block text-sm text-muted-foreground-2;
+  }
+}

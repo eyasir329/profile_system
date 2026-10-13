@@ -1,0 +1,154 @@
+# Docker Compose for the profile system.
+#
+# Three services:
+#   - db:       MariaDB 11, with a named volume for data persistence
+#   - web:      PHP 8.3 + Apache, built from ./Dockerfile
+#   - adminer:  Web-based DB GUI (browser at http://localhost:8081)
+#
+# Bring everything up:
+#   docker compose up -d --build
+#
+# Bring it down (keeps data):
+#   docker compose down
+#
+# Nuke everything including the database (DESTRUCTIVE):
+#   docker compose down -v
+#
+# All passwords and other config live in .env. Copy .env.example to .env
+# the first time and edit as needed.
+
+services:
+  db:
+    image: mariadb:11.4
+    container_name: profile_db
+    restart: unless-stopped
+    # Use the mariadb root password from .env. Don't bake credentials into
+    # the image — anyone with `docker inspect` can read them.
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+      # Optional: set the default DB. The web entrypoint also creates the
+      # database, so this is purely a hint to the mariadb init scripts.
+      MARIADB_DATABASE: ${DB_NAME:-profile_system}
+    volumes:
+      - db_data:/var/lib/mysql
+      # First-time SQL files. Ignored on subsequent starts unless the
+      # volume is wiped. Keep this minimal — heavy schema lives in
+      # migrations/ and is applied by the web entrypoint.
+      - ./docker/db-init:/docker-entrypoint-initdb.d:ro
+    # No host port mapping — only the web service talks to the DB, and
+    # they share the compose network.
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: profile_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Map host:8080 -> container:80. Change the left side if 8080 is in
+      # use on your machine (e.g. "9000:80").
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      # The web entrypoint uses DB_USER + DB_PASSWORD as the
+      # "operator" credentials (used to CREATE USER / GRANT for the
+      # app user and to apply schema + migrations). This should be a
+      # user with privileges to manage other users (typically root).
+      #
+      # The app itself connects as APP_DB_USER, which is set
+      # independently. If APP_DB_USER is left empty in .env, the app
+      # uses DB_USER (single-user dev mode).
+      DB_HOST: ${DB_HOST:-profile_db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-profile_system}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-rootpass}
+      APP_DB_USER: ${APP_DB_USER:-${DB_USER:-root}}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-${DB_PASSWORD:-rootpass}}
+      # Hardening switches; see .env / docs/TUNNEL.md.
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      APP_ENV: ${APP_ENV:-development}
+    volumes:
+      # Photo uploads persist across container recreations. The named
+      # volume is managed by Docker; you can `docker volume inspect
+      # profile_system_uploads` to see where it lives on disk. The
+      # container path is /var/www/html/uploads (Apache's doc root).
+      - uploads_data:/var/www/html/uploads
+      # Dev convenience: bind-mount the project source so that edits to
+      # PHP files, CSS, and SQL files are immediately visible without
+      # rebuilding the image.
+      #
+      # The on-disk layout is:
+      #   public/      → Apache DocumentRoot (/var/www/html)
+      #   src/         → application PHP (not web-served)
+      #   database/    → schema + migrations (read by the entrypoint)
+      #
+      # Edits to public/* and src/* are picked up on the next request
+      # (PHP, CSS, JS are re-parsed each request). Edits to files in
+      # database/migrations/* require `docker compose restart web` so
+      # the entrypoint re-evaluates the migrations directory.
+      #
+      # To go back to "image-baked" mode (recommended for production),
+      # remove these three lines and rebuild with `docker compose up --build`.
+      - ./public:/var/www/html:rw
+      - ./src:/var/www/src:rw
+      - ./database:/var/www/database:rw
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Web-based DB GUI — Adminer. Lets you browse tables, run queries, and
+  # edit rows without a separate MySQL client. Access at:
+  #   http://localhost:8081
+  # On the login page, use:
+  #   System:   MySQL
+  #   Server:   profile_db
+  #   Username: root
+  #   Password: rootpass  (or whatever DB_PASSWORD is set to in .env)
+  #   Database: profile_system
+  #
+  # IMPORTANT: Adminer has full DB root access. It is therefore put
+  # behind a Compose "tools" profile so it does NOT start with
+  # `docker compose up`. Start it on demand with:
+  #   make tools
+  #   docker compose --profile tools up -d adminer
+  # Never expose port 8081 to the public internet.
+  adminer:
+    image: adminer:4.8.1
+    container_name: profile_adminer
+    restart: unless-stopped
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Map host:8081 -> container:8080. Change the left side if 8081 is
+      # in use on your machine (e.g. "9001:8080").
+      - "${ADMINER_PORT:-8081}:8080"
+    environment:
+      # Pre-fill the "Server" field on the login page.
+      ADMINER_DEFAULT_SERVER: ${DB_HOST:-profile_db}
+      # Pick a built-in Adminer theme. Other options: pepa-linha-light,
+      # pepa-linha-dark, pepa-linha-admin, brentlegg, parachute, galkaev.
+      ADMINER_DESIGN: pepa-linha-dark
+    # Adminer is stateless (no volumes needed). Image stays small.
+
+# Named volumes — survive `docker compose down`. Use `docker compose
+# down -v` to actually delete them.
+volumes:
+  db_data:
+    name: profile_system_db
+  uploads_data:
+    name: profile_system_uploads

@@ -1,0 +1,217 @@
+/*
+ * Form controls.
+ *
+ *   <div class="field">
+ *     <label class="label" for="x">Name</label>
+ *     <input class="input" id="x" aria-describedby="x-hint x-err">
+ *     <p class="hint" id="x-hint">...</p>
+ *     <p class="field-error" id="x-err" role="alert">...</p>
+ *   </div>
+ *
+ * Error state is driven by aria-invalid="true" on the control, so the
+ * accessible state and the visual state can never disagree.
+ */
+@layer components {
+  .field {
+    @apply mb-5;
+  }
+  .field:last-child {
+    @apply mb-0;
+  }
+  .label {
+    @apply mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground;
+  }
+  .label .optional {
+    @apply font-normal text-muted-foreground-1;
+  }
+  .label .req {
+    @apply text-danger;
+  }
+
+  .input,
+  .select,
+  .textarea {
+    @apply block w-full rounded-md border bg-layer px-3 text-[0.9375rem] text-foreground;
+    border-color: var(--color-line-3);
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .dark .input,
+  .dark .select,
+  .dark .textarea {
+    border-color: var(--color-gray-700);
+  }
+  .input,
+  .select {
+    @apply h-10 py-0;
+  }
+  .select {
+    @apply pr-9;
+  }
+  .textarea {
+    @apply min-h-[5.5rem] resize-y py-2 leading-normal;
+  }
+  .input::placeholder,
+  .textarea::placeholder {
+    @apply text-muted-foreground;
+  }
+  .input:hover,
+  .select:hover,
+  .textarea:hover {
+    border-color: var(--color-line-4);
+  }
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    @apply border-primary outline-none;
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 20%, transparent);
+    --tw-ring-shadow: 0 0 #0000;
+  }
+  .input[aria-invalid="true"],
+  .select[aria-invalid="true"],
+  .textarea[aria-invalid="true"] {
+    @apply border-danger;
+  }
+  .input[aria-invalid="true"]:focus,
+  .select[aria-invalid="true"]:focus,
+  .textarea[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--danger) 20%, transparent);
+  }
+  .input:disabled,
+  .select:disabled,
+  .textarea:disabled,
+  .input[readonly] {
+    @apply cursor-not-allowed bg-muted text-muted-foreground-1;
+  }
+
+  .hint {
+    @apply mt-1.5 text-[0.8125rem] leading-snug text-muted-foreground-1;
+  }
+  .hint.is-ok {
+    @apply text-success;
+  }
+  .hint.is-bad {
+    @apply text-danger;
+  }
+  .field-error {
+    @apply mt-1.5 text-[0.8125rem] leading-snug font-medium text-danger;
+  }
+  /* Help text on the left, character counter on the right. */
+  .field-under {
+    @apply mt-1.5 flex items-start justify-between gap-3;
+  }
+  .field-under .hint {
+    @apply mt-0;
+  }
+  .counter {
+    @apply ml-auto shrink-0 text-xs text-muted-foreground-1 tabular-nums;
+  }
+  .counter.is-warning {
+    @apply text-warning;
+  }
+
+  /* A fixed prefix inside the control, e.g. the "@" before a username. */
+  .input-affix {
+    @apply relative;
+  }
+  .input-affix > .affix {
+    @apply pointer-events-none absolute inset-y-0 left-0 flex w-9 items-center justify-center text-muted-foreground-1;
+  }
+  .input-affix > .input {
+    @apply pl-8;
+  }
+
+  /* Password input with a show / hide button (Alpine: x-data="passwordField"). */
+  .password-field {
+    @apply relative;
+  }
+  .password-field > .input {
+    @apply pr-16;
+  }
+  .password-toggle {
+    @apply absolute inset-y-1 right-1 cursor-pointer rounded-sm px-2.5 text-[0.8125rem] font-medium text-muted-foreground-2 hover:bg-muted-hover hover:text-foreground;
+  }
+
+  /* Plain checkbox or radio with a label beside it. */
+  .check {
+    @apply flex cursor-pointer items-center gap-2.5 text-sm;
+  }
+  .check input,
+  .choice input {
+    @apply size-4 shrink-0 cursor-pointer border bg-layer text-primary;
+    border-color: var(--color-line-4);
+  }
+  .check input[type="checkbox"],
+  .choice input[type="checkbox"] {
+    @apply rounded-sm;
+  }
+  /* The forms plugin paints the tick on top of currentColor. */
+  .check input:checked,
+  .choice input:checked {
+    @apply border-transparent;
+    background-color: currentColor;
+  }
+  .check input:focus,
+  .choice input:focus {
+    --tw-ring-color: var(--primary);
+    --tw-ring-offset-color: var(--background);
+  }
+
+  /*
+   * Choice: a radio or checkbox with a title and a line of explanation,
+   * as one large click target. Lists are joined into a single bordered
+   * block so the options read as one question.
+   */
+  .choice-list {
+    @apply divide-y divide-layer-line overflow-hidden rounded-lg border border-layer-line bg-layer;
+  }
+  .choice-list.is-row {
+    @apply grid divide-y-0 sm:grid-cols-3 sm:divide-x;
+  }
+  .choice {
+    @apply flex cursor-pointer items-start gap-3 px-4 py-3.5;
+    transition: background-color 120ms;
+  }
+  .choice:hover {
+    @apply bg-layer-hover;
+  }
+  .choice:has(input:checked) {
+    background: color-mix(in oklch, var(--primary) 6%, var(--layer));
+  }
+  .choice input {
+    @apply mt-[0.2rem];
+  }
+  .choice input[data-locked] {
+    @apply cursor-not-allowed opacity-60;
+  }
+  .choice-title {
+    @apply block text-sm font-medium text-foreground;
+  }
+  .choice-desc {
+    @apply mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground-2;
+  }
+
+  /* Two columns from the sm breakpoint; add .col-span-full to a field for a full row. */
+  .form-grid {
+    @apply grid gap-x-5 sm:grid-cols-2;
+  }
+  .form-grid > .field {
+    @apply mb-5;
+  }
+
+  /* Submit row. Primary action is last (right); notes sit on the left. */
+  .form-actions {
+    @apply mt-6 flex flex-wrap items-center justify-end gap-3;
+  }
+  .form-actions.is-start {
+    @apply justify-start;
+  }
+  .form-note {
+    @apply mr-auto text-[0.8125rem] text-muted-foreground-1;
+  }
+
+  /* Six-digit code entry. */
+  .input-code {
+    @apply w-[9.5rem] text-center text-lg tracking-[0.3em] tabular-nums;
+    font-family: var(--font-mono);
+  }
+}

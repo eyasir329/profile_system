@@ -1,0 +1,170 @@
+/*
+ * Design tokens.
+ *
+ * Preline's theme.css maps semantic names (background, layer, primary,
+ * muted-foreground, ...) onto Tailwind's gray scale in light mode and its
+ * neutral scale in dark mode. Instead of restating a few hundred variables,
+ * we replace those two scales with one warm "paper and ink" scale and give
+ * `primary` an ink-blue scale. Every Preline token then follows.
+ *
+ * The reasoning behind each choice is in docs/DESIGN.md.
+ */
+@theme {
+  /* ---- Type ---- */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+  --font-serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia,
+    "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* ---- Radius: small and square-ish. Pills are for avatars and dots only. ---- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  /* ---- Neutrals: one warm scale, used for gray (light) and neutral (dark) ---- */
+  --color-gray-50: oklch(0.985 0.003 80);
+  --color-gray-100: oklch(0.966 0.004 80);
+  --color-gray-200: oklch(0.923 0.006 78);
+  --color-gray-300: oklch(0.868 0.008 76);
+  --color-gray-400: oklch(0.708 0.01 72);
+  --color-gray-500: oklch(0.535 0.011 68);
+  --color-gray-600: oklch(0.44 0.011 66);
+  --color-gray-700: oklch(0.365 0.01 64);
+  --color-gray-800: oklch(0.268 0.008 62);
+  --color-gray-900: oklch(0.212 0.007 60);
+  --color-gray-950: oklch(0.158 0.006 60);
+
+  --color-neutral-50: var(--color-gray-50);
+  --color-neutral-100: var(--color-gray-100);
+  --color-neutral-200: var(--color-gray-200);
+  --color-neutral-300: var(--color-gray-300);
+  --color-neutral-400: var(--color-gray-400);
+  --color-neutral-500: var(--color-gray-500);
+  --color-neutral-600: var(--color-gray-600);
+  --color-neutral-700: var(--color-gray-700);
+  --color-neutral-800: var(--color-gray-800);
+  --color-neutral-900: var(--color-gray-900);
+  --color-neutral-950: var(--color-gray-950);
+
+  /* ---- Status colours (text / border / soft background per state) ---- */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+
+  /* ---- Role dots ---- */
+  --color-role-admin: var(--role-admin);
+  --color-role-teacher: var(--role-teacher);
+  --color-role-student: var(--role-student);
+
+  /* ---- Elevation: hairlines do most of the work; shadows are for things that float ---- */
+  --shadow-pop: 0 1px 2px oklch(0.2 0.01 60 / 0.06), 0 8px 24px -6px oklch(0.2 0.01 60 / 0.16);
+}
+
+:root {
+  /* Ink blue. 700 is the brand colour in light mode. */
+  --primary-50: oklch(0.971 0.012 255);
+  --primary-100: oklch(0.936 0.026 255);
+  --primary-200: oklch(0.875 0.048 255);
+  --primary-300: oklch(0.79 0.075 255);
+  --primary-400: oklch(0.69 0.105 256);
+  --primary-500: oklch(0.565 0.125 257);
+  --primary-600: oklch(0.46 0.12 258);
+  --primary-700: oklch(0.385 0.105 259);
+  --primary-800: oklch(0.315 0.082 260);
+  --primary-900: oklch(0.262 0.06 260);
+  --primary-950: oklch(0.195 0.042 260);
+
+  --primary: var(--color-primary-700);
+  --primary-hover: var(--color-primary-800);
+  --primary-focus: var(--color-primary-800);
+  --primary-active: var(--color-primary-900);
+  --primary-checked: var(--color-primary-700);
+
+  /* The page is paper; cards and inputs sit on it in white. */
+  --background: var(--color-gray-50);
+  --background-1: var(--color-gray-100);
+  --foreground: var(--color-gray-900);
+
+  --success: oklch(0.44 0.1 155);
+  --success-soft: oklch(0.962 0.03 155);
+  --success-line: oklch(0.86 0.07 155);
+  --warning: oklch(0.47 0.1 70);
+  --warning-soft: oklch(0.967 0.04 85);
+  --warning-line: oklch(0.86 0.09 82);
+  --danger: oklch(0.5 0.17 27);
+  --danger-soft: oklch(0.966 0.02 25);
+  --danger-line: oklch(0.87 0.065 25);
+  --info: var(--color-primary-700);
+  --info-soft: var(--color-primary-50);
+  --info-line: var(--color-primary-200);
+
+  --destructive: oklch(0.52 0.19 27);
+  --destructive-hover: oklch(0.46 0.18 27);
+  --destructive-focus: oklch(0.46 0.18 27);
+
+  --role-admin: oklch(0.56 0.17 30);
+  --role-teacher: oklch(0.68 0.13 75);
+  --role-student: oklch(0.6 0.09 195);
+
+  color-scheme: light;
+}
+
+.dark {
+  --primary: var(--color-primary-300);
+  --primary-foreground: var(--color-gray-950);
+  --primary-hover: var(--color-primary-200);
+  --primary-focus: var(--color-primary-200);
+  --primary-active: var(--color-primary-100);
+  --primary-checked: var(--color-primary-300);
+
+  /* Three steps of depth: page, card, raised. */
+  --background: var(--color-gray-950);
+  --background-1: var(--color-gray-900);
+  --foreground: var(--color-gray-100);
+  --layer: var(--color-gray-900);
+  --layer-line: var(--color-gray-800);
+  --layer-hover: var(--color-gray-800);
+  --card: var(--color-gray-900);
+  --card-line: var(--color-gray-800);
+  --navbar: var(--color-gray-950);
+  --navbar-line: var(--color-gray-800);
+  --border: var(--color-gray-800);
+  --dropdown: var(--color-gray-900);
+  --dropdown-line: var(--color-gray-700);
+  --overlay: var(--color-gray-900);
+  --overlay-line: var(--color-gray-700);
+  --table-line: var(--color-gray-800);
+  --muted: var(--color-gray-900);
+  --muted-hover: var(--color-gray-800);
+
+  --success: oklch(0.8 0.13 155);
+  --success-soft: oklch(0.27 0.045 155);
+  --success-line: oklch(0.4 0.07 155);
+  --warning: oklch(0.83 0.12 82);
+  --warning-soft: oklch(0.28 0.045 80);
+  --warning-line: oklch(0.42 0.07 80);
+  --danger: oklch(0.78 0.13 25);
+  --danger-soft: oklch(0.27 0.055 25);
+  --danger-line: oklch(0.42 0.1 25);
+  --info: var(--color-primary-300);
+  --info-soft: oklch(0.26 0.04 258);
+  --info-line: oklch(0.4 0.07 258);
+
+  --destructive: oklch(0.6 0.19 27);
+  --destructive-hover: oklch(0.66 0.18 27);
+  --destructive-focus: oklch(0.66 0.18 27);
+
+  color-scheme: dark;
+}

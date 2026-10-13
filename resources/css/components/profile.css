@@ -1,0 +1,253 @@
+/*
+ * Profile pages: the identity header, entries, tags and the inline editor
+ * that resources/js/profile-editor.js builds. The same entry markup is used
+ * read-only in the directory (src/includes/directory.php).
+ */
+@layer components {
+  /* ---- Identity header ---- */
+  .identity {
+    @apply mb-10 flex flex-wrap items-start gap-x-6 gap-y-5;
+  }
+  .identity-body {
+    @apply min-w-0 flex-1 basis-64;
+  }
+  .identity-name {
+    @apply text-[1.75rem] leading-tight font-semibold tracking-[-0.01em];
+    font-family: var(--font-serif);
+    font-variation-settings: "opsz" 32;
+  }
+  .identity-meta {
+    @apply mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground-2;
+  }
+  .identity-headline {
+    @apply mt-2 text-[0.9375rem];
+  }
+  .identity-actions {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+
+  /* Avatar with a camera button; also the drop target for a new photo. */
+  .photo-zone {
+    @apply relative rounded-full;
+  }
+  .photo-zone.is-dragover {
+    @apply outline-2 outline-offset-4 outline-primary outline-dashed;
+  }
+  .photo-zone.is-busy {
+    @apply animate-pulse;
+  }
+  .photo-zone-btn {
+    @apply absolute -right-1 -bottom-1 flex size-8 cursor-pointer items-center justify-center rounded-full border bg-layer text-muted-foreground-2 hover:text-foreground;
+    border-color: var(--color-line-3);
+  }
+
+  /* ---- Completion panel ---- */
+  .completion {
+    @apply w-full rounded-lg border border-card-line bg-card p-4 lg:w-72;
+  }
+  .completion-head {
+    @apply mb-2 flex items-baseline justify-between text-sm;
+  }
+  .completion-head strong {
+    @apply text-base font-semibold tabular-nums;
+  }
+  .completion-detail {
+    @apply mt-2.5 text-[0.8125rem] text-muted-foreground-2;
+  }
+  .step-list {
+    @apply mt-2 flex flex-col gap-1;
+  }
+  .step {
+    @apply flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.8125rem] font-medium text-primary no-underline hover:bg-muted-hover;
+  }
+  .step .chev {
+    @apply ml-auto text-muted-foreground-1;
+  }
+
+  /* ---- Two-column layout: section list + content ---- */
+  .profile-layout {
+    @apply grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 lg:grid-cols-[13.5rem_minmax(0,1fr)];
+  }
+  .profile-nav {
+    @apply sticky top-14 z-30 -mx-4 border-b border-layer-line bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:top-20 lg:mx-0 lg:self-start lg:border-0 lg:bg-transparent lg:p-0;
+  }
+  .profile-nav-note {
+    @apply mt-5 hidden px-3 text-[0.8125rem] leading-snug text-muted-foreground-1 lg:block;
+  }
+  .side-nav-item.is-complete .side-nav-count {
+    @apply text-muted-foreground-2;
+  }
+
+  /* ---- Basics: label / value / edit, one per row ---- */
+  .value-card {
+    @apply grid items-start gap-x-4 gap-y-1.5 border-b border-layer-line py-4;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "label actions" "body body";
+  }
+  @media (width >= 40rem) {
+    .value-card {
+      grid-template-columns: 9rem minmax(0, 1fr) auto;
+      grid-template-areas: "label body actions";
+    }
+  }
+  .value-card-label {
+    grid-area: label;
+    @apply text-sm font-medium text-muted-foreground-2 sm:pt-px;
+  }
+  .value-card-body {
+    grid-area: body;
+    @apply min-w-0 break-words;
+  }
+  /* Line breaks the user typed are kept (bio, address). */
+  .value-card-body [data-value-display] {
+    @apply whitespace-pre-line;
+  }
+  .value-card-body .muted {
+    @apply text-muted-foreground-1;
+  }
+  .value-card > [data-value-actions] {
+    grid-area: actions;
+  }
+  /* While editing, the form takes the place of the value and its button. */
+  .value-card.is-editing {
+    grid-template-areas: "label label" "body body";
+  }
+  @media (width >= 40rem) {
+    .value-card.is-editing {
+      grid-template-areas: "label body body";
+    }
+  }
+  .value-card.is-editing .inline-form {
+    grid-area: body;
+  }
+
+  /* ---- Entry: one row of a repeating section ---- */
+  .entry-list {
+    @apply flex flex-col;
+  }
+  .entry {
+    @apply relative flex items-start gap-4 border-b border-layer-line py-4;
+  }
+  .entry.is-flash {
+    animation: entry-flash 1.6s ease-out;
+  }
+  .entry-body {
+    @apply min-w-0 flex-1;
+  }
+  .entry-title {
+    @apply font-medium;
+  }
+  .entry-sub {
+    @apply text-sm text-muted-foreground-2;
+  }
+  .entry-meta {
+    @apply mt-0.5 text-[0.8125rem] text-muted-foreground-1;
+  }
+  .entry-text {
+    @apply mt-2 max-w-[70ch] text-sm whitespace-pre-line;
+  }
+  .entry-links {
+    @apply mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem];
+  }
+  .entry-links a {
+    @apply inline-flex items-center gap-1;
+  }
+  .entry-links .icon {
+    @apply size-3.5;
+  }
+  .entry-actions {
+    @apply flex shrink-0 gap-0.5;
+  }
+  .entry-action {
+    @apply flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground-1 hover:bg-muted-hover hover:text-foreground;
+  }
+  .entry-action.is-danger:hover {
+    @apply bg-danger-soft text-danger;
+  }
+  .entry.is-editing {
+    @apply block;
+  }
+  @keyframes entry-flash {
+    from {
+      background: color-mix(in oklch, var(--primary) 12%, transparent);
+    }
+  }
+
+  /* Tag sections (skills, languages, research interests): entries become chips. */
+  .entry-list[data-layout="tags"] {
+    @apply flex-row flex-wrap gap-2 py-4;
+  }
+  .entry-list[data-layout="tags"]:not(:has(*)) {
+    @apply hidden;
+  }
+  .entry-list[data-layout="tags"] .entry {
+    @apply items-center gap-1 rounded-md border bg-layer py-1 pr-1 pl-3;
+    border-color: var(--color-line-2);
+  }
+  .dark .entry-list[data-layout="tags"] .entry {
+    border-color: var(--color-gray-700);
+  }
+  .entry-list[data-layout="tags"] .entry-body {
+    @apply flex items-baseline gap-2;
+  }
+  .entry-list[data-layout="tags"] .entry:not(:has(.entry-actions)) {
+    @apply pr-3;
+  }
+  .entry-list[data-layout="tags"] .entry-action {
+    @apply size-6;
+  }
+  .entry-list[data-layout="tags"] .entry-action .icon {
+    @apply size-3.5;
+  }
+  .entry-list[data-layout="tags"] .entry.is-editing,
+  .entry-list[data-layout="tags"] .draft {
+    @apply w-full basis-full border-0 bg-transparent p-0;
+  }
+  .tag-name {
+    @apply text-sm font-medium;
+  }
+  .tag-level {
+    @apply text-xs text-muted-foreground-1;
+  }
+
+  /* "Add your first ..." button shown while a section has no entries. */
+  .section-empty {
+    @apply mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm font-medium text-muted-foreground-2 hover:border-primary hover:text-primary;
+    border-color: var(--color-line-3);
+  }
+  .dark .section-empty {
+    border-color: var(--color-gray-700);
+  }
+
+  /* ---- Inline form (built in JS) ---- */
+  .inline-form {
+    @apply rounded-lg border bg-card p-4 sm:p-5;
+    border-color: var(--color-line-3);
+  }
+  .dark .inline-form {
+    border-color: var(--color-gray-700);
+  }
+  .draft {
+    @apply py-4;
+  }
+  .inline-form-title {
+    @apply mb-4 text-sm font-semibold;
+  }
+  .inline-form .form-grid > .is-full {
+    @apply sm:col-span-2;
+  }
+  .inline-form-foot {
+    @apply mt-1 flex flex-wrap items-center gap-3;
+  }
+  .inline-form-foot .form-actions {
+    @apply mt-0 ml-auto;
+  }
+  .inline-form-error {
+    @apply w-full text-[0.8125rem] font-medium text-danger;
+  }
+
+  /* ---- Directory: read-only profile ---- */
+  .bio {
+    @apply max-w-[70ch] py-4 whitespace-pre-line;
+  }
+}
