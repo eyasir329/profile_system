@@ -15,7 +15,7 @@
     @apply px-6 pt-6 pb-2;
   }
   .modal-title {
-    @apply text-base font-semibold;
+    @apply text-lg font-bold;
   }
   .modal-text {
     @apply mt-1.5 text-sm text-muted-foreground-2;
@@ -65,7 +65,7 @@
     @apply block font-semibold;
   }
   .toast-action {
-    @apply shrink-0 cursor-pointer rounded-sm px-2 py-0.5 text-[0.8125rem] font-semibold text-primary-300 underline underline-offset-2 hover:text-primary-200;
+    @apply shrink-0 cursor-pointer rounded-sm px-2 py-0.5 text-sm font-semibold text-primary-300 underline underline-offset-2 hover:text-primary-200;
   }
   .toast-close {
     @apply flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-sm text-gray-400 hover:bg-gray-700 hover:text-gray-50;

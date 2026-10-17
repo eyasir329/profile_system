@@ -42,7 +42,7 @@
 
   /* Role: a coloured dot and the role name. The dot is the only use of the role colours. */
   .role {
-    @apply inline-flex items-center gap-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-foreground;
+    @apply inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap text-foreground;
   }
   .role::before {
     content: "";
@@ -78,7 +78,7 @@
     border-color: var(--color-gray-700);
   }
   .empty-title {
-    @apply text-base font-semibold;
+    @apply text-lg font-bold;
   }
   .empty p {
     @apply mx-auto mt-1 max-w-[46ch] text-sm text-muted-foreground-2;

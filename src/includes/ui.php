@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 /**
  * Presentation helpers shared by the templates: icons, avatars, role
- * chips, alerts, and the read-only rendering of profile entries.
+ * chips, alerts and progress bars.
  * Every helper returns an HTML string and escapes what it is given.
  * The class names they emit are documented in docs/COMPONENTS.md.
  */
 
 require_once __DIR__ . '/url.php';
-require_once __DIR__ . '/profile_sections.php';
+require_once __DIR__ . '/lab_fields.php';
 
 /**
  * Inline 16px stroke icon (24px grid, 2px stroke, round joins).
@@ -20,6 +20,9 @@ function pf_icon(string $name, string $class = ''): string
 {
     static $paths = [
         'edit'     => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+        'cap'      => '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>',
+        'book'     => '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/><path d="M9 8h6"/>',
+        'folder'   => '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
         'copy'     => '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
         'trash'    => '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
         'plus'     => '<path d="M12 5v14M5 12h14"/>',
@@ -104,6 +107,19 @@ function ui_pw_toggle(): string
 }
 
 /** Thin progress bar. $labelledBy is the id of the element that names it. */
+/**
+ * A cell or field that can hold several items (theses, papers, award
+ * recipients). One item is plain text; several are a numbered list with a
+ * divider between them (class .multi), so where one ends and the next
+ * begins is clear. $items are plain strings; empty ones are dropped.
+ */
+function ui_multi(array $items): string
+{
+    $items = array_values(array_filter(array_map('trim', $items), fn($v) => $v !== ''));
+    if (count($items) < 2) { return e($items[0] ?? ''); }
+    return '<ol class="multi">' . implode('', array_map(fn($v) => '<li>' . e($v) . '</li>', $items)) . '</ol>';
+}
+
 function ui_progress(int $percent, string $labelledBy = '', string $attrs = '', string $barAttrs = ''): string
 {
     $percent = max(0, min(100, $percent));
@@ -134,7 +150,6 @@ function ui_ago(int $seconds, string $absolute): string
  */
 function ui_activity(string $kind, ?string $detail, int $count = 1): array
 {
-    global $SECTIONS;
     $detail = trim((string)$detail);
 
     switch ($kind) {
@@ -144,18 +159,8 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
         case 'register':
             return ['user', 'Created your account'];
         case 'profile_update':
-            if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to your profile']; }
-            if ($detail === 'photo')       { return ['camera', 'Changed your profile photo']; }
-            if ($detail === 'photo_clear') { return ['camera', 'Removed your profile photo']; }
-            if (preg_match('/^(basics|add|update|duplicate|delete):(\w+)$/', $detail, $m)) {
-                if ($m[1] === 'basics') {
-                    $labels = ['bio' => 'bio', 'phone' => 'phone number', 'address' => 'address', 'profession' => 'profession'];
-                    return ['edit', 'Updated your ' . ($labels[$m[2]] ?? 'profile')];
-                }
-                $title = lcfirst((string)($SECTIONS[$m[2]]['title'] ?? 'your profile'));
-                $verbs = ['add' => 'Added to ', 'update' => 'Edited ', 'duplicate' => 'Copied an entry in ', 'delete' => 'Removed an entry from '];
-                return [$m[1] === 'delete' ? 'trash' : 'edit', $verbs[$m[1]] . $title];
-            }
+            if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to your lab details']; }
+            if (str_starts_with($detail, 'lab:')) { return ['edit', 'Updated your lab details']; }
             return ['edit', 'Updated your profile'];
         case 'account_update':
             return ['user', 'Updated your account details'];
@@ -168,151 +173,29 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
         case 'role_switch':
             if ($count > 1) { return ['swap', 'Switched role ' . $count . ' times']; }
             return ['swap', 'Switched role' . ($detail !== '' ? ' (' . str_replace('->', ' → ', $detail) . ')' : '')];
+        case 'invite_create':
+            return ['link', 'Created an invitation link'];
+        case 'invite_revoke':
+            return ['link', 'Cancelled an invitation'];
+        case 'admin_user_create':
+            return ['user', 'Created a user' . ($detail !== '' ? ' (' . explode(';', $detail)[0] . ')' : '')];
+        case 'admin_user_update':
+            return ['user', 'Edited a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'admin_user_deactivate':
+            return ['user', 'Deactivated a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'admin_user_restore':
+            return ['user', 'Restored a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'admin_user_delete':
+            return ['trash', 'Deleted a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'resources_update':
+            if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to lab resources']; }
+            if ($detail === 'take_journal')    { return ['check', 'Took a potential journal']; }
+            if ($detail === 'release_journal') { return ['edit', 'Released a potential journal']; }
+            $what = str_ends_with($detail, '_template') ? 'a template' : (str_ends_with($detail, '_journal') ? 'a potential journal' : 'a data/code link');
+            $verb = ['add' => 'Added', 'edit' => 'Edited', 'delete' => 'Deleted'][explode('_', $detail)[0]] ?? 'Changed';
+            return ['edit', $verb . ' ' . $what . ' in lab resources'];
         case 'role_change':
             return ['shield', 'Your role was changed' . ($detail !== '' ? ' (' . $detail . ')' : '')];
     }
     return ['dot', ucfirst(str_replace('_', ' ', $kind))];
-}
-
-// ---- Read-only rendering of one profile-section entry -------------------
-// Used by the profile editor (first paint + op responses) and by the
-// teacher's student view, so an entry looks the same everywhere.
-
-/** Sections that read better as a row of chips than as a list of entries. */
-function pf_is_tag_section(string $sectionKey): bool
-{
-    return in_array($sectionKey, ['skills', 'research_interests', 'languages'], true);
-}
-
-/**
- * Break one section row into display parts:
- *   title, url (optional link for the title), sub, meta, body, tag,
- *   links ([label, url] pairs).
- * Column names match database/schema.sql — keep them in sync with $SECTIONS.
- */
-function row_summary_parts(string $sectionKey, array $row, array $def): array
-{
-    $v = fn(string $name): string => trim((string)($row[$name] ?? ''));
-    $join = fn(array $parts): string => implode(' · ', array_filter($parts, fn($s) => $s !== ''));
-    $monthYear = function (string $date): string {
-        $ts = $date !== '' ? strtotime($date) : false;
-        return $ts ? date('M Y', $ts) : '';
-    };
-    $range = function (string $from, string $to): string {
-        if ($from !== '' && $to !== '') { return $from . ' – ' . $to; }
-        return $from !== '' ? 'From ' . $from : $to;
-    };
-    $optionLabel = function (string $field) use ($def, $v): string {
-        $val = $v($field);
-        if ($val === '') { return ''; }
-        foreach ($def['fields'] as $f) {
-            if ($f[0] === $field && is_array($f[5] ?? null) && isset($f[5][$val])) {
-                return (string)$f[5][$val];
-            }
-        }
-        return ucwords(str_replace('_', ' ', $val));
-    };
-    $safeUrl = fn(string $url): string => preg_match('#^https?://#i', $url) ? $url : '';
-    $doiLink = function (string $doi) use ($safeUrl): array {
-        if ($doi === '') { return []; }
-        $url = $safeUrl($doi) ?: 'https://doi.org/' . str_replace(' ', '%20', $doi);
-        return [['DOI ' . preg_replace('#^https?://(dx\.)?doi\.org/#i', '', $doi), $url]];
-    };
-
-    $p = ['title' => '', 'url' => '', 'sub' => '', 'meta' => '', 'body' => '', 'tag' => '', 'links' => []];
-
-    switch ($sectionKey) {
-        case 'educations':
-            $p['title'] = $v('institution');
-            $p['sub']   = implode(', ', array_filter([$v('degree'), $v('field_of_study')], fn($s) => $s !== ''));
-            $p['meta']  = $range($v('start_year'), $v('end_year'));
-            $p['body']  = $v('description');
-            break;
-        case 'work_experiences':
-            $p['title'] = $v('role_title');
-            $p['sub']   = $join([$v('organization'), $v('location')]);
-            $end = $monthYear($v('end_date'));
-            if ($end === '' && !empty($row['is_current'])) { $end = 'Present'; }
-            $p['meta']  = $range($monthYear($v('start_date')), $end);
-            $p['body']  = $v('description');
-            break;
-        case 'journal_articles':
-            $p['title'] = $v('title');
-            $p['url']   = $safeUrl($v('url'));
-            $p['sub']   = $v('authors');
-            $volume = $v('volume') . ($v('issue') !== '' ? '(' . $v('issue') . ')' : '');
-            $p['meta']  = $join([
-                $v('journal'), $v('year'),
-                $volume !== '' ? 'Vol. ' . $volume : '',
-                $v('pages') !== '' ? 'pp. ' . $v('pages') : '',
-            ]);
-            $p['links'] = $doiLink($v('doi'));
-            break;
-        case 'conference_papers':
-            $p['title'] = $v('title');
-            $p['url']   = $safeUrl($v('url'));
-            $p['sub']   = $v('authors');
-            $p['meta']  = $join([$v('conference'), $v('year'), $v('location')]);
-            $p['links'] = $doiLink($v('doi'));
-            break;
-        case 'awards':
-            $p['title'] = $v('title');
-            $p['sub']   = $v('organization');
-            $p['meta']  = $v('year');
-            $p['body']  = $v('description');
-            break;
-        case 'certifications':
-            $p['title'] = $v('name');
-            $p['sub']   = $v('issuing_org');
-            $issued  = $monthYear($v('issue_date'));
-            $expires = $monthYear($v('expiry_date'));
-            $p['meta']  = $join([
-                $issued  !== '' ? 'Issued ' . $issued : '',
-                $expires !== '' ? 'Expires ' . $expires : '',
-                $v('credential_id') !== '' ? 'ID ' . $v('credential_id') : '',
-            ]);
-            if ($safeUrl($v('url')) !== '') { $p['links'][] = ['Show credential', $v('url')]; }
-            break;
-        case 'skills':
-            $p['title'] = $v('name');
-            $p['tag']   = $optionLabel('level');
-            break;
-        case 'languages':
-            $p['title'] = $v('name');
-            $p['tag']   = $optionLabel('proficiency');
-            break;
-        case 'research_interests':
-            $p['title'] = $v('name');
-            break;
-    }
-    return $p;
-}
-
-/** Inner HTML of a row's summary (the read-only view of one entry). */
-function row_summary_html(string $sectionKey, array $row, array $def, bool $isTags = false): string
-{
-    $p = row_summary_parts($sectionKey, $row, $def);
-    $title = $p['title'] !== '' ? e($p['title']) : '<span class="muted">Untitled</span>';
-
-    if ($isTags) {
-        return '<span class="tag-name">' . $title . '</span>'
-            . ($p['tag'] !== '' ? '<span class="tag-level">' . e($p['tag']) . '</span>' : '');
-    }
-
-    $ext = ' target="_blank" rel="noopener noreferrer"';
-    if ($p['url'] !== '') {
-        $title = '<a href="' . e($p['url']) . '"' . $ext . '>' . $title . '</a>';
-    }
-    $html = '<div class="entry-title">' . $title . '</div>';
-    if ($p['sub'] !== '')  { $html .= '<div class="entry-sub">' . e($p['sub']) . '</div>'; }
-    if ($p['meta'] !== '') { $html .= '<div class="entry-meta">' . e($p['meta']) . '</div>'; }
-    if ($p['body'] !== '') { $html .= '<p class="entry-text">' . e($p['body']) . '</p>'; }
-    if ($p['links']) {
-        $html .= '<div class="entry-links">';
-        foreach ($p['links'] as [$label, $url]) {
-            $html .= '<a href="' . e($url) . '"' . $ext . '>' . e($label) . ' ' . pf_icon('link') . '</a>';
-        }
-        $html .= '</div>';
-    }
-    return $html;
 }

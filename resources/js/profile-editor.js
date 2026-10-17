@@ -1,271 +1,163 @@
 /*
- * Inline editor for /profile.php: view first, edit in place.
+ * Inline editor for /profile.php: view first, edit one field in place.
  *
- * Every value saves on its own through POST /profile.php with `op=...`
- * (form data in, JSON out). There is no page-wide form and no save bar.
+ * Each lab field saves on its own through POST /profile.php with
+ * op=update_lab (form data in, JSON out). There is no page-wide form.
  *
  * Markup contract (see public/profile.php):
- *   [data-profile]                              the page root
- *   [data-value-card] [data-field=...]          one basics field
- *   [data-value-row] [data-section] [data-row-id]  one section entry
- *   [data-value-action=edit|duplicate|delete|add|edit-photo|clear-photo]
- *   [data-row-list] [data-section=...]          the entries of one section
- *   [data-section-empty=...]                    "add your first" button
- *   [data-section-nav] [data-section-link=...]  the section list
- *   [data-step=...]                             suggested next step
+ *   [data-profile]                               the page root
+ *   [data-value-card][data-field=...]            one editable field
+ *     [data-value-body] [data-value-display]     its current value
+ *     [data-value-actions] [data-value-action=edit] [data-action-label]
+ *   [data-step=lab:<field>] [data-step-locked]   suggested next step
+ *   [data-overall-bar|fill|text|detail]          the meter
+ *   [data-section-nav] [data-section-link=...]   the section list, with
+ *     [data-group-count=...] [data-nav-course-count]   its counts
+ *   [data-profile-section][data-section=...]     one section of the page
+ *   [data-readonly-field=...]                    a field the user cannot edit
+ *   [data-entry-add=<section>] [data-entry-list=<section>]   a repeating
+ *     section; rows are [data-entry-row=<id>][data-entry] with
+ *     [data-entry-edit] / [data-entry-delete]; counts in
+ *     [data-section-count] [data-entry-count] [data-section-empty];
+ *     [data-entry-legacy] is the old text, removed once entries exist
+ *   [data-tabs] [data-tab=<section>] [data-tab-panel=<section>]   the
+ *     tabbed publications/awards section; [data-entry-total] sums its tabs
+ *   [data-copy-bibtex]                           copy a row's BibTeX
+ *   [data-course-add] [data-course-form] [data-course-list]
+ *   [data-course-remove=<id>]                    the Courses history
+ *   [data-course-complete=1|0]                   mark the current course
+ *                                                completed, or undo it
  *
- * Config: window.PS_VIEW_MODE = { csrf, sections, rows, basics, hasPhoto }.
- * Entry HTML always comes from the server (first paint and op responses),
- * so there is no second renderer to keep in sync here. The forms are built
- * from the field metadata with the same component classes the PHP
- * templates use (.field, .label, .input, ... see docs/COMPONENTS.md).
+ * Config: window.PS_VIEW_MODE = { csrf, lab: { fields, values, all }, groups, entries, courses }.
+ *   fields  definitions of the fields this user may edit
+ *   values  their current values
+ *   all     every field's value (including admin-only ones), for the meter
+ *   groups  section key => its field keys ($GROUPS in profile.php)
+ *   entries repeating sections (lab_entry_defs() in profile.php)
  *
- * This module is plain DOM code on purpose: it creates and destroys forms
- * on demand, which is a poor fit for Alpine's declarative templates.
+ * Plain DOM code on purpose: it builds and removes a form on demand, which
+ * is a poor fit for Alpine's declarative templates. The form uses the same
+ * component classes as the PHP templates (see docs/COMPONENTS.md).
  */
 import { toast, confirm } from './ui.js';
 
-// POST one op. Resolves with the JSON body when `ok`, rejects with the body
-// otherwise. Unless `opts.quiet`, failures that are not field errors are
-// announced in a toast.
-const api = function (op, fields, opts) {
-  opts = opts || {};
+// POST one op. Resolves with the JSON body when `ok`, rejects with it otherwise.
+function api(op, fields) {
   const fd = new FormData();
   fd.append('op', op);
   fd.append('csrf_token', (window.PS_VIEW_MODE && window.PS_VIEW_MODE.csrf) || '');
-  Object.keys(fields || {}).forEach(function (k) {
-    const v = fields[k];
-    if (v === null || v === undefined) return;
-    if (typeof v === 'object' && !(v instanceof Blob)) {
-      // One level of nesting, so the server sees $_POST[k][k2].
-      Object.keys(v).forEach(function (k2) {
-        if (v[k2] !== null && v[k2] !== undefined) fd.append(k + '[' + k2 + ']', String(v[k2]));
-      });
-    } else {
-      fd.append(k, v);
-    }
-  });
-  const fail = function (body) {
-    if (!opts.quiet && !(body && body.field_errors)) {
-      toast(body.error, { type: 'error', duration: 6000 });
-    }
-    return Promise.reject(body);
-  };
-  return fetch(window.location.pathname, { method: 'POST', body: fd, credentials: 'same-origin' })
-    .then(function (r) {
-      return r.text().then(function (txt) {
+  Object.keys(fields).forEach((k) => fd.append(k, fields[k]));
+  return fetch(window.location.pathname, { method: 'POST', body: fd, credentials: 'same-origin' }).then(
+    (r) =>
+      r.text().then((txt) => {
         let body = null;
-        try { body = JSON.parse(txt); } catch (e) { /* not JSON */ }
+        try {
+          body = JSON.parse(txt);
+        } catch (e) {
+          /* not JSON */
+        }
         if (body && body.ok) return body;
         if (!body || typeof body !== 'object') {
           // An HTML answer means we were redirected to login or hit a
-          // CSRF error page, not the op-router.
+          // CSRF error page, not the op handler.
           body = { ok: false, error: 'Your session may have expired. Reload the page and try again.' };
         } else if (!body.field_errors && !body.error) {
           body.error = 'Something went wrong. Please try again.';
         }
-        return fail(body);
-      });
-    }, function () {
-      return fail({ ok: false, error: 'Could not reach the server. Check your connection and try again.' });
-    });
-};
+        return Promise.reject(body);
+      }),
+    () => Promise.reject({ ok: false, error: 'Could not reach the server. Check your connection and try again.' })
+  );
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+// Read one BibTeX entry and build an IEEE-style citation from it:
+//   A. Author, B. Author, and C. Author, "Title," Journal, vol. 1, no. 2,
+//   pp. 3-4, Mon. 2024.
+// Returns { citation, month: 'YYYY-MM' | '' } or null when nothing parses.
+function parseBibtex(src) {
+  const text = String(src || '');
+  const type = (text.match(/@(\w+)\s*\{/) || [])[1];
+  if (!type) return null;
+  const f = {};
+  // field = {value} (one level of nested braces) | "value" | bare
+  const re = /(\w+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)"|([\w.-]+))/g;
+  let m;
+  while ((m = re.exec(text))) f[m[1].toLowerCase()] = (m[2] ?? m[3] ?? m[4] ?? '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
+  if (!f.title) return null;
+  const names = (f.author || '').split(/\s+and\s+/i).filter(Boolean).map((a) => {
+    const [last, first] = a.includes(',') ? a.split(',').map((x) => x.trim()) : [a.split(' ').pop(), a.split(' ').slice(0, -1).join(' ')];
+    const initials = (first || '').split(/[\s-]+/).filter(Boolean).map((p) => p[0].toUpperCase() + '.').join(' ');
+    return (initials ? initials + ' ' : '') + last;
+  });
+  const authors = names.length > 2 ? names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1] : names.join(' and ');
+  const mi = f.month ? (/^\d+$/.test(f.month) ? Number(f.month) - 1 : MONTHS.indexOf(f.month.slice(0, 3).toLowerCase())) : -1;
+  const venue = f.journal || (f.booktitle ? 'in ' + f.booktitle : '');
+  const parts = [
+    venue,
+    f.volume && 'vol. ' + f.volume,
+    f.number && 'no. ' + f.number,
+    f.pages && (/[-–]/.test(f.pages) ? 'pp. ' : 'p. ') + f.pages.replace(/-+/g, '–'),
+    // IEEE abbreviates every month but May: "Mar.", "May", "Sep.".
+    [mi >= 0 ? MONTHS[mi][0].toUpperCase() + MONTHS[mi].slice(1) + (mi === 4 ? '' : '.') : '', f.year].filter(Boolean).join(' '),
+  ].filter(Boolean);
+  const citation = (authors ? authors + ', ' : '') + '"' + f.title + '," ' + parts.join(', ') + '.';
+  const month = f.year && /^\d{4}$/.test(f.year) ? f.year + '-' + String(mi >= 0 ? mi + 1 : 1).padStart(2, '0') : '';
+  return { citation, month: mi >= 0 ? month : '' };
+}
 
 export function initProfileEditor() {
   const cfg = window.PS_VIEW_MODE;
   const page = document.querySelector('[data-profile]');
-  if (!cfg || !page) return;
+  if (!cfg || !cfg.lab || !page) return;
 
-  const $  = function (sel, el) { return (el || page).querySelector(sel); };
-  const $$ = function (sel, el) { return Array.from((el || page).querySelectorAll(sel)); };
-  const el = function (tag, cls, text) {
+  const $ = (sel, root) => (root || page).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || page).querySelectorAll(sel));
+  const el = (tag, cls, text) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
     if (text !== undefined) n.textContent = text;
     return n;
   };
-  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const reveal = function (node) {
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reveal = (node) => {
     const r = node.getBoundingClientRect();
     if (r.top < 80 || r.bottom > window.innerHeight - 16) {
       node.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
     }
   };
-  const focusQuietly = function (node) { if (node) node.focus({ preventScroll: true }); };
+  const focusQuietly = (node) => node && node.focus({ preventScroll: true });
+
+  const defs = cfg.lab.fields || {};
+  const values = Object.assign({}, cfg.lab.values);
+  const all = Object.assign({}, cfg.lab.all);
+  const cardOf = (field) => $('[data-value-card][data-field="' + field + '"]');
   let uid = 0;
 
-  const sectionDefs = cfg.sections || {};
-  const rowData     = cfg.rows || {};      // section -> id -> row
-  const basicDefs   = (cfg.basics && cfg.basics.fields) || {};
-  const basicValues = Object.assign({}, cfg.basics && cfg.basics.values);
-  let hasPhoto = !!cfg.hasPhoto;
-
-  const sectionEl = function (key) { return document.getElementById('sec-' + key); };
-  const listEl    = function (key) { return document.getElementById('row-list-' + key); };
-  const liveRows  = function (key) { return $$('[data-value-row]', listEl(key)); };
-
-  // ---------------------------------------------------------------- forms
-  // Shared behaviour for every inline form: dirty tracking, Esc to cancel
-  // (with a confirm when there are edits), Ctrl/Cmd+Enter to save, a busy
-  // state while saving, and per-field server errors.
+  // Warn before leaving while a form has unsaved edits.
   const openForms = new Set();
-  window.addEventListener('beforeunload', function (e) {
-    let dirty = false;
-    openForms.forEach(function (f) { if (f.dirty) dirty = true; });
-    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  window.addEventListener('beforeunload', (e) => {
+    if (Array.from(openForms).some((f) => f.dirty)) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   });
 
-  const clearErrors = function (form) {
-    $$('[aria-invalid="true"]', form).forEach(function (i) { i.removeAttribute('aria-invalid'); });
-    $$('[data-field-error]', form).forEach(function (n) { n.textContent = ''; n.hidden = true; });
-    const fe = $('[data-form-error]', form);
-    if (fe) { fe.textContent = ''; fe.hidden = true; }
-  };
-
-  const showErrors = function (form, body) {
-    const errors = (body && body.field_errors) || {};
-    const leftover = [];
-    let first = null;
-    Object.keys(errors).forEach(function (name) {
-      const wrap = form.querySelector('[data-field-name="' + name + '"]');
-      const slot = wrap && wrap.querySelector('[data-field-error]');
-      const input = wrap && wrap.querySelector('input, textarea, select');
-      if (!slot || !input) { leftover.push(errors[name]); return; }
-      slot.textContent = errors[name];
-      slot.hidden = false;
-      input.setAttribute('aria-invalid', 'true');
-      if (!first) first = input;
-    });
-    if (!Object.keys(errors).length) {
-      leftover.push((body && body.error) || 'Could not save. Please try again.');
-    }
-    const fe = $('[data-form-error]', form);
-    if (fe && leftover.length) { fe.textContent = leftover.join(' '); fe.hidden = false; }
-    if (first) first.focus();
-  };
-
-  // opts: { save(addAnother) -> Promise, close() }
-  const wireForm = function (form, opts) {
-    const state = { dirty: false };
-    let busy = false;
-    let addAnother = false;
-    openForms.add(state);
-    const markDirty = function () { state.dirty = true; };
-    form.addEventListener('input', markDirty);
-    form.addEventListener('change', markDirty);
-
-    const close = function () { openForms.delete(state); opts.close(); };
-    const cancel = function () {
-      if (busy) return;
-      if (!state.dirty) { close(); return; }
-      confirm({
-        title: 'Discard your changes?',
-        body: 'What you typed here has not been saved.',
-        okText: 'Discard',
-        cancelText: 'Keep editing',
-      }).then(function (ok) { if (ok) close(); });
-    };
-
-    form.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        e.preventDefault(); e.stopPropagation(); cancel();
-      } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault(); form.requestSubmit();
-      }
-    });
-    $('[data-form-cancel]', form).addEventListener('click', cancel);
-    // A plain button, so Enter in a field always means "Save".
-    const another = $('[data-form-another]', form);
-    if (another) {
-      another.addEventListener('click', function () {
-        addAnother = true;
-        form.requestSubmit();
-        addAnother = false;
-      });
-    }
-
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (busy) return;
-      const thenAnother = addAnother;
-      clearErrors(form);
-      const saveBtn = $('[data-form-save]', form);
-      const label = saveBtn.textContent;
-      busy = true;
-      form.setAttribute('aria-busy', 'true');
-      $$('button', form).forEach(function (b) { b.disabled = true; });
-      saveBtn.textContent = 'Saving…';
-      opts.save(thenAnother).then(function () {
-        openForms.delete(state);
-      }, function (body) {
-        busy = false;
-        form.removeAttribute('aria-busy');
-        $$('button', form).forEach(function (b) { b.disabled = false; });
-        saveBtn.textContent = label;
-        showErrors(form, body);
-      });
-    });
-  };
-
-  const formFooter = function (opts) {
-    const foot = el('div', 'inline-form-foot');
-    const err = el('p', 'inline-form-error');
-    err.setAttribute('data-form-error', '');
-    err.setAttribute('role', 'alert');
-    err.hidden = true;
-    const actions = el('div', 'form-actions');
-    const cancel = el('button', 'btn btn-ghost btn-sm', 'Cancel');
-    cancel.type = 'button';
-    cancel.setAttribute('data-form-cancel', '');
-    actions.appendChild(cancel);
-    if (opts && opts.another) {
-      const another = el('button', 'btn btn-secondary btn-sm', 'Save and add another');
-      another.type = 'button';
-      another.setAttribute('data-form-another', '');
-      actions.appendChild(another);
-    }
-    const save = el('button', 'btn btn-primary btn-sm', 'Save');
-    save.type = 'submit';
-    save.setAttribute('data-form-save', '');
-    actions.appendChild(save);
-    foot.appendChild(err);
-    if (opts && opts.note) foot.appendChild(el('span', 'form-note', opts.note));
-    foot.appendChild(actions);
-    return foot;
-  };
-
-  const addCounter = function (wrap, input, max) {
-    const counter = el('span', 'counter');
-    const update = function () {
-      const len = input.value.length;
-      counter.textContent = len + ' / ' + max;
-      counter.classList.toggle('is-warning', len >= max * 0.9);
-    };
-    input.addEventListener('input', update);
-    update();
-    wrap.appendChild(counter);
-  };
-
-  // ------------------------------------------------- completion + counts
-  const stepDone = function (key) {
-    if (key === 'photo') return hasPhoto;
-    const parts = key.split(':');
-    if (parts[0] === 'basics') return !!basicValues[parts[1]];
-    return liveRows(parts[1]).length > 0;
-  };
-
-  const refreshProgress = function () {
+  // ------------------------------------------------------------ meter
+  const refreshProgress = () => {
     const steps = $$('[data-step]');
-    let done = 0, shown = 0;
-    steps.forEach(function (btn) {
-      const isDone = stepDone(btn.getAttribute('data-step'));
+    let done = 0;
+    let shown = 0;
+    steps.forEach((btn) => {
+      const isDone = !!all[btn.getAttribute('data-step').split(':')[1]];
       if (isDone) done++;
-      // Offer at most three next steps at a time.
-      const show = !isDone && shown < 3;
+      // Offer at most three next steps, and never one only an admin can do.
+      const show = !isDone && !btn.hasAttribute('data-step-locked') && shown < 3;
       if (show) shown++;
       btn.hidden = !show;
     });
-    const pct = steps.length ? Math.round(done / steps.length * 100) : 0;
+    const pct = steps.length ? Math.round((done / steps.length) * 100) : 0;
     const bar = $('[data-overall-bar]');
     if (bar) bar.setAttribute('aria-valuenow', String(pct));
     const fill = $('[data-overall-fill]');
@@ -274,511 +166,635 @@ export function initProfileEditor() {
     if (text) text.textContent = pct + '%';
     const detail = $('[data-overall-detail]');
     if (detail) {
-      detail.textContent = done === steps.length
-        ? 'Every section is filled in. Nice work.'
-        : done + ' of ' + steps.length + ' done. Suggested next:';
+      detail.textContent =
+        done === steps.length
+          ? 'Every field is filled in. Nice work.'
+          : done + ' of ' + steps.length + ' done.' + (shown ? ' Suggested next:' : '');
     }
-
-    const keys = Object.keys(basicDefs);
-    const filled = keys.filter(function (k) { return !!basicValues[k]; }).length;
-    const link = $('[data-section-nav] [data-section-link="basics"]');
-    if (link) {
-      link.classList.toggle('is-complete', filled === keys.length);
-      $('[data-nav-count]', link).textContent = filled + '/' + keys.length;
-    }
+    Object.keys(cfg.groups || {}).forEach((g) => {
+      const fields = cfg.groups[g];
+      const n = fields.filter((f) => !!all[f]).length;
+      const c = $('[data-group-count="' + g + '"]');
+      if (c) {
+        c.textContent = n + '/' + fields.length;
+        c.closest('[data-section-link]').classList.toggle('is-complete', n === fields.length);
+      }
+    });
+    const courses = $('[data-nav-course-count]');
+    if (courses) courses.textContent = String($$('[data-course-row]').length);
   };
 
-  const refreshSection = function (key) {
-    const sec = sectionEl(key);
-    if (!sec) return;
-    const n = liveRows(key).length;
-    const count = $('[data-section-count]', sec);
-    if (count) { count.textContent = n + (n === 1 ? ' entry' : ' entries'); count.hidden = n === 0; }
-    const empty = $('[data-section-empty]', sec);
-    if (empty) empty.hidden = n > 0 || !!$('[data-draft]', sec);
-    const link = $('[data-section-nav] [data-section-link="' + key + '"]');
-    if (link) {
-      link.classList.toggle('is-complete', n > 0);
-      const navCount = $('[data-nav-count]', link);
-      navCount.textContent = String(n);
-      navCount.hidden = n === 0;
+  // Redraw everything a reply can change: the current course, its
+  // enrolment date (both shown read-only in places) and the Courses list.
+  const applyState = (state) => {
+    if (!state) return;
+    Object.keys(state.values).forEach((k) => {
+      all[k] = state.values[k];
+      if (k in values) values[k] = state.values[k];
+      const card = cardOf(k);
+      if (card && !$('form', card)) render(card);
+      const ro = $('[data-readonly-field="' + k + '"] [data-value-display]');
+      if (ro) {
+        ro.textContent = state.values[k] || 'Not set';
+        ro.classList.toggle('muted', !state.values[k]);
+      }
+    });
+    const list = $('[data-course-list]');
+    if (list) list.innerHTML = state.history; // server-rendered and escaped
+    // One course at a time: "Add course" opens up once the current one is completed.
+    const addBtn = $('[data-course-add]');
+    if (addBtn && 'can_add_course' in state) {
+      addBtn.disabled = !state.can_add_course;
+      if (state.can_add_course) addBtn.removeAttribute('aria-describedby');
+      else addBtn.setAttribute('aria-describedby', 'course-add-why');
+      const why = $('[data-course-add-why]');
+      if (why) why.hidden = state.can_add_course;
+      if (!state.can_add_course) { const slot = $('[data-course-form]'); if (slot) slot.innerHTML = ''; }
     }
     refreshProgress();
   };
 
-  // ------------------------------------------------------------- basics
-  const renderBasics = function (card) {
+  // ------------------------------------------------------------- view
+  const render = (card) => {
     const field = card.getAttribute('data-field');
-    const def = basicDefs[field];
-    const value = basicValues[field] || '';
+    const value = values[field] || '';
     const display = $('[data-value-display]', card);
-    display.textContent = value || def.empty;
+    display.textContent = value || defs[field].empty;
+    // The header repeats course, student ID and email.
+    const echo = $('[data-echo="' + field + '"]');
+    if (echo) { echo.textContent = (field === 'student_id' && value ? 'ID ' : '') + value; echo.hidden = !value; }
     display.classList.toggle('muted', !value);
-    card.toggleAttribute('data-empty', !value);
     const btn = $('[data-value-action="edit"]', card);
     const verb = value ? 'Edit' : 'Add';
     $('[data-action-label]', btn).textContent = verb;
-    btn.setAttribute('aria-label', verb + ' ' + def.label.toLowerCase());
-    if (field === 'profession') {
-      const headline = $('[data-hero-profession]');
-      if (headline) { headline.textContent = value; headline.hidden = !value; }
-    }
+    btn.setAttribute('aria-label', verb + ' ' + defs[field].label.toLowerCase());
   };
 
-  const editBasics = function (card) {
+  // ------------------------------------------------------------- edit
+  const edit = (card) => {
+    if (!card) return;
     const existing = $('form', card);
-    if (existing) { focusQuietly($('input, textarea', existing)); return; }
+    if (existing) {
+      focusQuietly($('input, textarea', existing));
+      return;
+    }
     const field = card.getAttribute('data-field');
-    const def = basicDefs[field];
+    const def = defs[field];
     if (!def) return;
     const body = $('[data-value-body]', card);
     const actions = $('[data-value-actions]', card);
+    const state = { dirty: false };
+    let busy = false;
 
     const form = el('form', 'inline-form');
     const wrap = el('div', 'field');
-    wrap.setAttribute('data-field-name', field);
-    const input = def.type === 'textarea' ? el('textarea', 'textarea') : el('input', 'input');
-    if (def.type === 'textarea') input.rows = def.rows || 4;
-    else input.type = def.type;
-    input.maxLength = def.max;
-    input.placeholder = def.placeholder || '';
-    input.value = basicValues[field] || '';
+    const multiline = def.type === 'textarea';
+    const choice = def.type === 'select';
+    const input = multiline ? el('textarea', 'textarea') : choice ? el('select', 'select') : el('input', 'input');
+    if (choice) {
+      const current = values[field] || '';
+      if (!current) {
+        const blank = el('option', '', 'Choose…');
+        blank.value = '';
+        blank.disabled = true;
+        blank.selected = true;
+        input.appendChild(blank);
+      }
+      // Also offer the stored value when it is not an option (e.g. an
+      // enrolment month the system set, such as "July").
+      const options = (def.options || []).slice();
+      if (current && options.indexOf(current) < 0) options.push(current);
+      options.forEach((o) => {
+        const opt = el('option', '', o);
+        opt.value = o;
+        input.appendChild(opt);
+      });
+      if (current) input.value = current;
+    } else {
+      if (multiline) input.rows = def.rows || 3;
+      else input.type = def.type;
+      input.maxLength = def.max;
+      input.placeholder = def.placeholder || '';
+      input.value = values[field] || '';
+    }
+    if (def.required) input.required = true;
     input.setAttribute('aria-labelledby', 'lbl-' + field);
-    const errId = 'pf-err-' + (++uid);
+    const errId = 'pf-err-' + ++uid;
     input.setAttribute('aria-describedby', errId);
     wrap.appendChild(input);
+
     const under = el('div', 'field-under');
     if (def.hint) under.appendChild(el('span', 'hint', def.hint));
-    if (def.type === 'textarea') addCounter(under, input, def.max);
+    if (multiline) {
+      const counter = el('span', 'counter');
+      const count = () => {
+        counter.textContent = input.value.length + ' / ' + def.max;
+        counter.classList.toggle('is-warning', input.value.length >= def.max * 0.9);
+      };
+      input.addEventListener('input', count);
+      count();
+      under.appendChild(counter);
+    }
     if (under.childNodes.length) wrap.appendChild(under);
+
     const err = el('p', 'field-error');
     err.id = errId;
-    err.setAttribute('data-field-error', '');
+    err.setAttribute('role', 'alert');
     err.hidden = true;
     wrap.appendChild(err);
     form.appendChild(wrap);
-    form.appendChild(formFooter());
 
-    const close = function () {
+    const foot = el('div', 'form-actions');
+    const cancelBtn = el('button', 'btn btn-ghost btn-sm', 'Cancel');
+    cancelBtn.type = 'button';
+    const saveBtn = el('button', 'btn btn-primary btn-sm', 'Save');
+    saveBtn.type = 'submit';
+    foot.appendChild(cancelBtn);
+    foot.appendChild(saveBtn);
+    form.appendChild(foot);
+
+    const close = () => {
+      openForms.delete(state);
       form.remove();
       body.hidden = false;
       actions.hidden = false;
       card.classList.remove('is-editing');
       focusQuietly($('[data-value-action="edit"]', card));
     };
-    wireForm(form, {
-      close: close,
-      save: function () {
-        return api('update_basics', { field: field, value: input.value }, { quiet: true }).then(function (res) {
-          basicValues[field] = res.value || '';
-          renderBasics(card);
+    const cancel = () => {
+      if (busy) return;
+      if (!state.dirty) return close();
+      confirm({
+        title: 'Discard your changes?',
+        body: 'What you typed here has not been saved.',
+        okText: 'Discard',
+        cancelText: 'Keep editing',
+      }).then((ok) => ok && close());
+    };
+
+    form.addEventListener('input', () => (state.dirty = true));
+    form.addEventListener('change', () => (state.dirty = true));
+    cancelBtn.addEventListener('click', cancel);
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cancel();
+      } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (busy) return;
+      busy = true;
+      err.hidden = true;
+      input.removeAttribute('aria-invalid');
+      saveBtn.disabled = cancelBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      api('update_lab', { field, value: input.value }).then(
+        (res) => {
+          values[field] = all[field] = res.value || '';
+          render(card);
           close();
-          refreshProgress();
+          applyState(res.state);
           toast(def.label + (res.value ? ' saved.' : ' cleared.'), { type: 'success' });
-        });
-      },
+        },
+        (res) => {
+          busy = false;
+          saveBtn.disabled = cancelBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+          err.textContent = (res.field_errors && res.field_errors[field]) || res.error || 'Could not save. Please try again.';
+          err.hidden = false;
+          input.setAttribute('aria-invalid', 'true');
+          input.focus();
+        }
+      );
     });
 
+    openForms.add(state);
     card.classList.add('is-editing');
     body.hidden = true;
     actions.hidden = true;
     card.appendChild(form);
     reveal(card);
     focusQuietly(input);
-    if (input.type !== 'textarea' && input.select) input.select();
+    if (!multiline && !choice) input.select();
   };
 
-  // --------------------------------------------------------- row forms
-  // Build the form for one entry of `section` from the field metadata.
-  // Returns { form, read() } where read() gives the fields to POST.
-  const buildRowForm = function (section, row, isNew) {
-    const sec = sectionDefs[section];
-    const title = (isNew ? 'New ' : 'Edit ') + sec.singular.toLowerCase();
-    const form = el('form', 'inline-form');
-    form.setAttribute('aria-label', title);
-    form.appendChild(el('p', 'inline-form-title', title));
-    const grid = el('div', 'form-grid');
+  // ---------------------------------------------------------- entries
+  // Theses and papers: a list of entries per section. Each entry is saved
+  // on its own; every reply carries the section's rows, rendered by PHP.
+  const entryDefs = cfg.entries || {};
+
+  const setEntries = (section, res) => {
+    const list = $('[data-entry-list="' + section + '"]');
+    if (list) list.innerHTML = res.list; // server-rendered and escaped
+    const n = res.count;
+    const label = $('[data-section-count="' + section + '"]');
+    if (label) { label.textContent = n + (n === 1 ? ' entry' : ' entries'); label.hidden = !n; }
+    $$('[data-entry-count="' + section + '"]').forEach((c) => {
+      c.textContent = String(n);
+      const link = c.closest('[data-section-link]');
+      if (link) link.classList.toggle('is-complete', n > 0);
+    });
+    $$('[data-entry-total]').forEach((c) => {
+      const total = c.getAttribute('data-entry-total').split(' ')
+        .reduce((sum, k) => sum + Number(($('[data-entry-count="' + k + '"]') || {}).textContent || 0), 0);
+      c.textContent = String(total);
+      c.closest('[data-section-link]').classList.toggle('is-complete', total > 0);
+    });
+    const empty = $('[data-section-empty="' + section + '"]');
+    if (empty) empty.hidden = n > 0;
+    const legacy = $('[data-entry-legacy="' + section + '"]');
+    if (legacy && n > 0) legacy.remove();
+    applyState(res.state);
+  };
+
+  // Build the form for one entry. `current` holds its values (empty when adding).
+  const entryForm = (section, current, onSave, onClose) => {
+    const def = entryDefs[section];
+    const form = el('form', 'inline-form entry-form');
+    const state = { dirty: false };
+    let busy = false;
     const inputs = {};
-    let anyRequired = false;
-
-    sec.fields.forEach(function (f) {
-      const id = 'pf-f-' + (++uid);
+    const errs = {};
+    (def.form || Object.keys(def.fields)).forEach((name) => {
+      const f = def.fields[name];
       const wrap = el('div', 'field');
-      wrap.setAttribute('data-field-name', f.name);
-      const wide = f.type === 'textarea' || f.type === 'check' || ((f.type === 'text' || f.type === 'url') && f.max >= 200);
-      if (wide) wrap.classList.add('is-full');
-      const value = row && row[f.name] !== null && row[f.name] !== undefined ? String(row[f.name]) : '';
+      // Width out of three columns: long fields take the whole row.
+      const span = f.span || (f.type === 'text' || f.type === 'textarea' ? 3 : 1);
+      wrap.style.setProperty('--span', String(span));
+      const id = 'pf-entry-' + ++uid;
+      const label = el('label', 'label', f.label);
+      label.htmlFor = id;
       let input;
-
-      if (f.type === 'check') {
-        const lbl = el('label', 'check');
-        input = el('input');
-        input.type = 'checkbox';
-        input.checked = !!row && !!Number(row[f.name]);
-        lbl.appendChild(input);
-        lbl.appendChild(el('span', '', f.label));
-        wrap.appendChild(lbl);
-      } else {
-        const lbl = el('label', 'label', f.label);
-        lbl.htmlFor = id;
-        if (f.required) {
-          anyRequired = true;
-          const star = el('span', 'req', ' *');
-          star.setAttribute('aria-hidden', 'true');
-          lbl.appendChild(star);
-        }
-        wrap.appendChild(lbl);
-        if (f.type === 'textarea') {
-          input = el('textarea', 'textarea');
-          input.rows = f.rows || 4;
-        } else if (f.type === 'select') {
-          input = el('select', 'select');
-          let known = false;
-          f.options.forEach(function (o) {
-            const opt = el('option', '', o[1]);
-            opt.value = o[0];
-            if (o[0] === value) known = true;
-            input.appendChild(opt);
-          });
-          if (!known && value) {
-            // Keep a stored value the option list no longer offers.
-            const opt = el('option', '', value);
-            opt.value = value;
-            input.appendChild(opt);
-          }
-        } else {
-          input = el('input', 'input');
-          if (f.type === 'year') {
-            input.type = 'number';
-            input.min = '1900'; input.max = '2100'; input.step = '1';
-            input.inputMode = 'numeric';
-            input.placeholder = 'YYYY';
-          } else {
-            input.type = ['date', 'url', 'email', 'tel', 'number'].indexOf(f.type) >= 0 ? f.type : 'text';
-          }
-        }
-        input.value = value;
-        if (f.placeholder) input.placeholder = f.placeholder;
-        if (f.max > 0 && f.type !== 'year') input.maxLength = f.max;
-        if (f.required) input.required = true;
-        Object.keys(f.attrs || {}).forEach(function (k) {
-          input.setAttribute(k, k === 'enterkeyhint' ? String(f.attrs[k]).toLowerCase() : f.attrs[k]);
+      if (f.type === 'select') {
+        input = el('select', 'select');
+        const blank = el('option', '', 'Choose…');
+        blank.value = '';
+        blank.disabled = true;
+        input.appendChild(blank);
+        Object.keys(f.options).forEach((v) => {
+          const opt = el('option', '', f.options[v]);
+          opt.value = v;
+          input.appendChild(opt);
         });
-        wrap.appendChild(input);
+        input.value = current[name] || f.default || '';
+        if (!input.value) blank.selected = true;
+      } else if (f.type === 'textarea') {
+        input = el('textarea', 'textarea');
+        input.rows = name === 'bibtex' ? 5 : 3;
+        input.maxLength = f.max;
+        input.placeholder = f.placeholder || '';
+        input.value = current[name] || '';
+      } else {
+        input = el('input', 'input');
+        // month → "2024-05", date → "2024-05-01"; both stored as typed.
+        input.type = f.type === 'month' || f.type === 'date' ? f.type : 'text';
+        if (f.type === 'number') input.inputMode = 'decimal';
+        if (f.type === 'month') input.placeholder = 'YYYY-MM';
+        input.maxLength = f.max;
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.value = current[name] || '';
       }
       input.id = id;
-      input.name = f.name;
-      inputs[f.name] = input;
-
-      const describedBy = [];
-      if (f.help || (f.type === 'textarea' && f.max > 0)) {
-        const under = el('div', 'field-under');
-        if (f.help) {
-          const help = el('span', 'hint', f.help);
-          help.id = id + '-help';
-          describedBy.push(help.id);
-          under.appendChild(help);
-        }
-        if (f.type === 'textarea' && f.max > 0) addCounter(under, input, f.max);
-        wrap.appendChild(under);
-      }
+      input.name = name;
+      if (f.required) input.required = true;
       const err = el('p', 'field-error');
       err.id = id + '-err';
-      err.setAttribute('data-field-error', '');
+      err.setAttribute('role', 'alert');
       err.hidden = true;
-      describedBy.push(err.id);
-      wrap.appendChild(err);
-      input.setAttribute('aria-describedby', describedBy.join(' '));
-      grid.appendChild(wrap);
+      input.setAttribute('aria-describedby', err.id);
+      wrap.append(label, input, err);
+      form.appendChild(wrap);
+      inputs[name] = input;
+      errs[name] = err;
     });
-    form.appendChild(grid);
-
-    // "I currently work here" makes the end date meaningless.
-    if (inputs.is_current && inputs.end_date) {
-      const sync = function () {
-        inputs.end_date.disabled = inputs.is_current.checked;
-        if (inputs.is_current.checked) inputs.end_date.value = '';
-      };
-      inputs.is_current.addEventListener('change', sync);
-      sync();
-    }
-
-    form.appendChild(formFooter({
-      another: isNew && sec.tags,
-      note: anyRequired ? '* Required' : '',
-    }));
-
-    const read = function () {
-      const out = {};
-      Object.keys(inputs).forEach(function (name) {
-        const i = inputs[name];
-        out[name] = i.type === 'checkbox' ? (i.checked ? 1 : 0) : i.value;
-      });
-      return out;
-    };
-    // Catch an end before its start here; the server only checks formats.
-    const orderError = function () {
-      const pairs = [['start_year', 'end_year', 'End year'], ['start_date', 'end_date', 'End date'], ['issue_date', 'expiry_date', 'Expiry date']];
-      for (let i = 0; i < pairs.length; i++) {
-        const a = inputs[pairs[i][0]], b = inputs[pairs[i][1]];
-        if (a && b && a.value && b.value && b.value < a.value) {
-          const out = {};
-          out[pairs[i][1]] = pairs[i][2] + ' can’t be earlier than the start.';
-          return { field_errors: out };
+    // Pasted BibTeX can fill in the citation and the month.
+    if (inputs.bibtex && inputs.citation) {
+      const fill = el('button', 'btn btn-ghost btn-sm mt-1.5', 'Fill citation and month from BibTeX');
+      fill.type = 'button';
+      fill.addEventListener('click', () => {
+        const got = parseBibtex(inputs.bibtex.value);
+        if (!got) return toast('Paste a BibTeX entry first.', { type: 'error' });
+        const filled = [];
+        if (got.citation && !inputs.citation.value.trim()) {
+          inputs.citation.value = got.citation;
+          filled.push('citation');
         }
-      }
-      return null;
-    };
-    return { form: form, read: read, orderError: orderError, first: inputs[sec.fields[0].name] };
-  };
-
-  const rowFromHtml = function (html) {
-    const t = document.createElement('template');
-    t.innerHTML = html.trim();
-    return t.content.firstElementChild;
-  };
-  const flash = function (node) {
-    node.classList.add('is-flash');
-    setTimeout(function () { node.classList.remove('is-flash'); }, 1600);
-  };
-  const remember = function (section, row) {
-    if (!rowData[section]) rowData[section] = {};
-    rowData[section][String(row.id)] = row;
-  };
-
-  const editRow = function (row) {
-    const existing = $('form', row);
-    if (existing) { focusQuietly($('input, textarea, select', existing)); return; }
-    const section = row.getAttribute('data-section');
-    const id = row.getAttribute('data-row-id');
-    const data = (rowData[section] || {})[id];
-    if (!data || !sectionDefs[section]) {
-      toast('This entry could not be opened. Reload the page and try again.', { type: 'error' });
-      return;
+        if (got.month && inputs.pub_month && !inputs.pub_month.value) {
+          inputs.pub_month.value = got.month;
+          filled.push('month');
+        }
+        state.dirty = true;
+        toast(filled.length ? 'Filled the ' + filled.join(' and ') + ' from BibTeX.' : 'Citation and month are already filled in. Clear them to fill from BibTeX.', { type: filled.length ? 'success' : 'info' });
+      });
+      inputs.bibtex.parentNode.insertBefore(fill, inputs.bibtex.nextSibling);
     }
-    const built = buildRowForm(section, data, false);
-    const summary = $('[data-value-body]', row);
-    const actions = $('[data-value-actions]', row);
-    const close = function () {
-      built.form.remove();
-      summary.hidden = false;
-      actions.hidden = false;
-      row.classList.remove('is-editing');
-      focusQuietly($('[data-value-action="edit"]', row));
+    const foot = el('div', 'form-actions');
+    const cancelBtn = el('button', 'btn btn-ghost btn-sm', 'Cancel');
+    cancelBtn.type = 'button';
+    const saveBtn = el('button', 'btn btn-primary btn-sm', 'Save');
+    saveBtn.type = 'submit';
+    foot.append(cancelBtn, saveBtn);
+    form.appendChild(foot);
+
+    const close = () => {
+      openForms.delete(state);
+      onClose();
     };
-    wireForm(built.form, {
-      close: close,
-      save: function () {
-        const bad = built.orderError();
-        if (bad) return Promise.reject(bad);
-        return api('update_row', { section: section, id: id, fields: built.read() }, { quiet: true }).then(function (res) {
-          remember(section, res.row);
-          const fresh = rowFromHtml(res.html);
-          row.replaceWith(fresh);
-          flash(fresh);
-          focusQuietly($('[data-value-action="edit"]', fresh));
-          toast('Saved.', { type: 'success' });
-        });
-      },
+    const cancel = () => {
+      if (busy) return;
+      if (!state.dirty) return close();
+      confirm({
+        title: 'Discard your changes?',
+        body: 'What you typed here has not been saved.',
+        okText: 'Discard',
+        cancelText: 'Keep editing',
+      }).then((ok) => ok && close());
+    };
+    form.addEventListener('input', () => (state.dirty = true));
+    form.addEventListener('change', () => (state.dirty = true));
+    cancelBtn.addEventListener('click', cancel);
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cancel();
+      }
     });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (busy) return;
+      busy = true;
+      Object.keys(errs).forEach((k) => { errs[k].hidden = true; inputs[k].removeAttribute('aria-invalid'); });
+      saveBtn.disabled = cancelBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      const data = {};
+      Object.keys(inputs).forEach((k) => (data[k] = inputs[k].value));
+      onSave(data).then(
+        (res) => {
+          openForms.delete(state);
+          setEntries(section, res);
+        },
+        (res) => {
+          busy = false;
+          saveBtn.disabled = cancelBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+          const fe = res.field_errors || {};
+          const first = Object.keys(fe).find((k) => errs[k]);
+          Object.keys(fe).forEach((k) => {
+            if (!errs[k]) return;
+            errs[k].textContent = fe[k];
+            errs[k].hidden = false;
+            inputs[k].setAttribute('aria-invalid', 'true');
+          });
+          if (first) inputs[first].focus();
+          else toast(res.error || 'Could not save. Please try again.', { type: 'error' });
+        }
+      );
+    });
+    openForms.add(state);
+    return { form, first: inputs[Object.keys(inputs)[0]] };
+  };
+
+  // Tabs (publications/awards): click, or arrow keys between tabs.
+  const showTab = (tab, focus) => {
+    const list = tab.closest('[data-tabs]');
+    $$('[data-tab]', list).forEach((t) => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      const panel = $('[data-tab-panel="' + t.getAttribute('data-tab') + '"]');
+      if (panel) panel.hidden = !on;
+    });
+    if (focus) tab.focus();
+  };
+  $$('[data-tabs]').forEach((list) => {
+    list.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
+      const tabs = $$('[data-tab]', list);
+      const i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      e.preventDefault();
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      showTab(tabs[next], true);
+    });
+  });
+
+  // Adding opens a draft below the list. Nothing is written until Save.
+  const addEntry = (section) => {
+    const list = $('[data-entry-list="' + section + '"]');
+    if (!list || !entryDefs[section]) return;
+    const open = $('[data-entry-draft]', list.parentNode);
+    if (open) return focusQuietly($('input, select', open));
+    const draft = el('div', 'mt-4');
+    draft.setAttribute('data-entry-draft', '');
+    const empty = $('[data-section-empty="' + section + '"]');
+    const built = entryForm(
+      section,
+      {},
+      (data) => api('add_entry', Object.assign({ section }, data)).then((res) => {
+        draft.remove();
+        toast('Entry added.', { type: 'success' });
+        return res;
+      }),
+      () => {
+        draft.remove();
+        if (empty) empty.hidden = list.children.length > 0;
+      }
+    );
+    draft.appendChild(built.form);
+    if (empty) empty.hidden = true;
+    list.after(draft);
+    reveal(draft);
+    focusQuietly(built.first);
+  };
+
+  const editEntry = (row) => {
+    if ($('form', row)) return;
+    const section = row.getAttribute('data-entry-section');
+    let current = {};
+    try { current = JSON.parse(row.getAttribute('data-entry')) || {}; } catch (e) { /* keep empty */ }
+    const body = $('[data-entry-body]', row);
+    const actions = $('[data-entry-actions]', row);
+    const built = entryForm(
+      section,
+      current,
+      (data) => api('update_entry', Object.assign({ section, id: row.getAttribute('data-entry-row') }, data)).then((res) => {
+        toast('Entry saved.', { type: 'success' });
+        return res;
+      }),
+      () => {
+        built.form.remove();
+        body.hidden = actions.hidden = false;
+        row.classList.remove('is-editing');
+        focusQuietly($('[data-entry-edit]', row));
+      }
+    );
     row.classList.add('is-editing');
-    summary.hidden = true;
-    actions.hidden = true;
+    body.hidden = actions.hidden = true;
     row.appendChild(built.form);
     reveal(row);
     focusQuietly(built.first);
   };
 
-  // Adding opens a draft form. Nothing is written until Save, so
-  // cancelling never leaves an empty entry behind.
-  const addRow = function (section) {
-    const list = listEl(section);
-    if (!list || !sectionDefs[section]) return;
-    const open = $('[data-draft]', list);
-    if (open) { reveal(open); focusQuietly($('input, textarea, select', open)); return; }
-
-    const built = buildRowForm(section, null, true);
-    const draft = el('div', 'draft');
-    draft.setAttribute('data-draft', '');
-    draft.appendChild(built.form);
-    const close = function () {
-      draft.remove();
-      refreshSection(section);
-    };
-    wireForm(built.form, {
-      close: function () {
-        close();
-        focusQuietly($('[data-section-head] [data-value-action="add"]', sectionEl(section)));
-      },
-      save: function (thenAnother) {
-        const bad = built.orderError();
-        if (bad) return Promise.reject(bad);
-        return api('add_row', { section: section, mode: 'fill', fields: built.read() }, { quiet: true }).then(function (res) {
-          remember(section, res.row);
-          const fresh = rowFromHtml(res.html);
-          draft.replaceWith(fresh);
-          refreshSection(section);
-          flash(fresh);
-          toast(sectionDefs[section].singular + ' added.', { type: 'success' });
-          if (thenAnother) addRow(section);
-          else focusQuietly($('[data-value-action="edit"]', fresh));
-        });
-      },
-    });
-    list.appendChild(draft);
-    refreshSection(section);
-    reveal(draft);
-    focusQuietly(built.first);
-  };
-
-  const duplicateRow = function (row, btn) {
-    const section = row.getAttribute('data-section');
-    btn.disabled = true;
-    api('duplicate_row', { section: section, id: row.getAttribute('data-row-id') }).then(function (res) {
-      btn.disabled = false;
-      remember(section, res.row);
-      const fresh = rowFromHtml(res.html);
-      row.after(fresh);
-      refreshSection(section);
-      toast('Copy created. Edit it to make it different.', { type: 'success' });
-      editRow(fresh);
-    }, function () { btn.disabled = false; });
-  };
-
-  // Delete right away, then offer Undo. Undo re-creates the entry in
-  // the same place (it gets a new id).
-  const deleteRow = function (row, btn) {
-    const section = row.getAttribute('data-section');
-    const id = row.getAttribute('data-row-id');
-    const name = row.getAttribute('data-row-name') || 'Entry';
-    btn.disabled = true;
-    api('delete_row', { section: section, id: id }).then(function (res) {
-      const next = row.nextElementSibling;
-      const neighbour = next && next.matches('[data-value-row]') ? next : row.previousElementSibling;
-      row.remove();
-      delete (rowData[section] || {})[id];
-      refreshSection(section);
-      focusQuietly((neighbour && $('[data-value-action="edit"]', neighbour)) ||
-                   $('[data-section-head] [data-value-action="add"]', sectionEl(section)));
-
-      const old = res.row;
-      const undo = function () {
-        const fields = {};
-        sectionDefs[section].fields.forEach(function (f) { fields[f.name] = old[f.name]; });
-        api('add_row', { section: section, mode: 'fill', fields: fields, sort_order: old.sort_order }).then(function (r2) {
-          remember(section, r2.row);
-          const fresh = rowFromHtml(r2.html);
-          const list = listEl(section);
-          if (next && next.parentNode === list) list.insertBefore(fresh, next);
-          else list.insertBefore(fresh, $('[data-draft]', list));
-          refreshSection(section);
-          flash(fresh);
-          focusQuietly($('[data-value-action="edit"]', fresh));
-        });
-      };
-      toast('Deleted “' + name + '”.', {
-        duration: 8000,
-        actions: old ? [{ label: 'Undo', onClick: undo }] : [],
-      });
-    }, function () { btn.disabled = false; });
-  };
-
-  // -------------------------------------------------------------- photo
-  const zone = $('[data-photo-zone]');
-  const photoInput = $('[data-photo-input]');
-  const setPhoto = function (src) {
-    hasPhoto = !!src;
-    const img = $('[data-header-avatar]');
-    const placeholder = $('[data-header-avatar-placeholder]');
-    if (src) img.src = src; else img.removeAttribute('src');
-    img.hidden = !src;
-    placeholder.hidden = !!src;
-    $('[data-value-action="clear-photo"]').hidden = !src;
-    $('[data-photo-label]').textContent = src ? 'Change photo' : 'Upload photo';
-    $('[data-photo-btn]').setAttribute('aria-label', src ? 'Change photo' : 'Upload a photo');
-    refreshProgress();
-  };
-  const uploadPhoto = function (file) {
-    if (!file) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
-      toast('That file type is not supported. Choose a JPG, PNG, WEBP or GIF image.', { type: 'error', duration: 6000 });
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast('That image is ' + (file.size / 1048576).toFixed(1) + ' MB. The limit is 2 MB.', { type: 'error', duration: 6000 });
-      return;
-    }
-    zone.classList.add('is-busy');
-    api('update_photo', { photo: file }, { quiet: true }).then(function (res) {
-      setPhoto(res.value);
-      toast('Photo updated.', { type: 'success' });
-    }, function (body) {
-      const msg = (body.field_errors && body.field_errors.photo) || body.error || 'The photo could not be uploaded.';
-      toast(msg, { type: 'error', duration: 6000 });
-    }).then(function () { zone.classList.remove('is-busy'); });
-  };
-  const clearPhoto = function () {
+  const deleteEntry = (row) => {
+    const section = row.getAttribute('data-entry-section');
     confirm({
-      title: 'Remove your photo?',
-      body: 'Your initial will be shown instead. You can upload a new photo any time.',
-      okText: 'Remove photo',
-    }).then(function (ok) {
+      title: 'Delete this entry?',
+      body: 'It is removed from your profile and the Students sheet.',
+      okText: 'Delete',
+      cancelText: 'Keep it',
+    }).then((ok) => {
       if (!ok) return;
-      api('clear_photo', {}).then(function () {
-        setPhoto(null);
-        toast('Photo removed.', { type: 'success' });
-      }, function () {});
+      api('delete_entry', { section, id: row.getAttribute('data-entry-row') }).then(
+        (res) => {
+          setEntries(section, res);
+          toast('Entry deleted.', { type: 'success' });
+        },
+        (res) => toast(res.error || 'Could not delete the entry.', { type: 'error' })
+      );
     });
   };
-  if (photoInput) {
-    photoInput.addEventListener('change', function () {
-      uploadPhoto(photoInput.files && photoInput.files[0]);
-      photoInput.value = '';
-    });
-  }
-  if (zone) {
-    ['dragenter', 'dragover'].forEach(function (ev) {
-      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add('is-dragover'); });
-    });
-    zone.addEventListener('dragleave', function (e) {
-      if (!zone.contains(e.relatedTarget)) zone.classList.remove('is-dragover');
-    });
-    zone.addEventListener('drop', function (e) {
-      e.preventDefault();
-      zone.classList.remove('is-dragover');
-      uploadPhoto(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
-    });
-  }
 
-  // ------------------------------------------------------------ clicks
-  page.addEventListener('click', function (e) {
-    const step = e.target.closest('[data-step]');
-    if (step) {
-      const parts = step.getAttribute('data-step').split(':');
-      if (parts[0] === 'photo') photoInput.click();
-      else if (parts[0] === 'basics') editBasics($('[data-value-card][data-field="' + parts[1] + '"]'));
-      else addRow(parts[1]);
-      return;
+  // ---------------------------------------------------------- courses
+  const addCourse = () => {
+    const slot = $('[data-course-form]');
+    const btn = $('[data-course-add]');
+    if (!slot || (btn && btn.disabled)) return;
+    if (slot.firstChild) return focusQuietly($('select', slot));
+    const form = el('form', 'inline-form my-4');
+    const wrap = el('div', 'field');
+    const label = el('label', 'label', 'New course');
+    const select = el('select', 'select');
+    select.id = label.htmlFor = 'pf-course-new';
+    select.required = true;
+    const blank = el('option', '', 'Choose…');
+    blank.value = '';
+    blank.disabled = blank.selected = true;
+    select.appendChild(blank);
+    (cfg.courses || []).forEach((c) => {
+      if (c === all.course) return; // already the current course
+      const opt = el('option', '', c);
+      opt.value = c;
+      select.appendChild(opt);
+    });
+    const hint = el('p', 'hint', 'It becomes your current course, enrolled today.');
+    const err = el('p', 'field-error');
+    err.setAttribute('role', 'alert');
+    err.hidden = true;
+    wrap.append(label, select, hint, err);
+    const foot = el('div', 'form-actions');
+    const cancelBtn = el('button', 'btn btn-ghost btn-sm', 'Cancel');
+    cancelBtn.type = 'button';
+    const saveBtn = el('button', 'btn btn-primary btn-sm', 'Add course');
+    saveBtn.type = 'submit';
+    foot.append(cancelBtn, saveBtn);
+    form.append(wrap, foot);
+    const close = () => {
+      form.remove();
+      focusQuietly($('[data-course-add]'));
+    };
+    cancelBtn.addEventListener('click', close);
+    form.addEventListener('keydown', (e) => e.key === 'Escape' && close());
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveBtn.disabled = true;
+      api('add_course', { course: select.value }).then(
+        (res) => {
+          close();
+          applyState(res.state);
+          toast('You are now in ' + res.value + '.', { type: 'success' });
+        },
+        (res) => {
+          saveBtn.disabled = false;
+          err.textContent = (res.field_errors && res.field_errors.course) || res.error || 'Could not add the course.';
+          err.hidden = false;
+        }
+      );
+    });
+    slot.appendChild(form);
+    reveal(form);
+    focusQuietly(select);
+  };
+
+  const removeCourse = (btn) => {
+    confirm({
+      title: 'Remove this course from your history?',
+      body: 'Only the record of this past course is removed. Your current course is not affected.',
+      okText: 'Remove',
+    }).then((ok) => {
+      if (!ok) return;
+      api('remove_course', { id: btn.getAttribute('data-course-remove') }).then(
+        (res) => {
+          applyState(res.state);
+          toast('Course removed.', { type: 'success' });
+        },
+        (res) => toast(res.error || 'Could not remove the course.', { type: 'error' })
+      );
+    });
+  };
+
+  // Mark the current course completed, or undo it.
+  const completeCourse = (btn) => {
+    const done = btn.getAttribute('data-course-complete') === '1';
+    const go = () =>
+      api('complete_course', { done: done ? '1' : '0' }).then(
+        (res) => {
+          applyState(res.state);
+          toast(done ? 'Course marked as completed.' : 'Course marked as not completed.', { type: 'success' });
+        },
+        (res) => toast(res.error || 'Could not update the course.', { type: 'error' })
+      );
+    if (!done) return go();
+    confirm({
+      title: 'Mark your course as completed?',
+      body: 'Your teachers will see you under Completed students. You can undo this.',
+      okText: 'Mark as completed',
+      cancelText: 'Not yet',
+    }).then((ok) => ok && go());
+  };
+
+  // A completion step: theses and papers open a new entry, others the field.
+  const openField = (field) => (entryDefs[field] ? addEntry(field) : defs[field] && edit(cardOf(field)));
+
+  // ----------------------------------------------------------- clicks
+  page.addEventListener('click', (e) => {
+    if (e.target.closest('[data-course-add]')) return addCourse();
+    const rm = e.target.closest('[data-course-remove]');
+    if (rm) return removeCourse(rm);
+    const cc = e.target.closest('[data-course-complete]');
+    if (cc) return completeCourse(cc);
+    const tab = e.target.closest('[data-tab]');
+    if (tab) return showTab(tab, false);
+    const copy = e.target.closest('[data-copy-bibtex]');
+    if (copy) {
+      const text = copy.parentNode.querySelector('pre').textContent;
+      return navigator.clipboard.writeText(text).then(
+        () => toast('BibTeX copied.', { type: 'success' }),
+        () => toast('Could not copy. Select the text and copy it instead.', { type: 'error' })
+      );
     }
-    const btn = e.target.closest('[data-value-action]');
-    if (!btn) return;
-    const action = btn.getAttribute('data-value-action');
-    const card = btn.closest('[data-value-card]');
-    const row = btn.closest('[data-value-row]');
-    if (action === 'edit-photo') photoInput.click();
-    else if (action === 'clear-photo') clearPhoto();
-    else if (action === 'add') addRow(btn.getAttribute('data-section'));
-    else if (action === 'edit' && card) editBasics(card);
-    else if (action === 'edit' && row) editRow(row);
-    else if (action === 'duplicate' && row) duplicateRow(row, btn);
-    else if (action === 'delete' && row) deleteRow(row, btn);
+    const add = e.target.closest('[data-entry-add]');
+    if (add) return addEntry(add.getAttribute('data-entry-add'));
+    const editE = e.target.closest('[data-entry-edit]');
+    if (editE) return editEntry(editE.closest('[data-entry-row]'));
+    const delE = e.target.closest('[data-entry-delete]');
+    if (delE) return deleteEntry(delE.closest('[data-entry-row]'));
+    const step = e.target.closest('[data-step]');
+    if (step) return openField(step.getAttribute('data-step').split(':')[1]);
+    const btn = e.target.closest('[data-value-action="edit"]');
+    if (btn) edit(btn.closest('[data-value-card]'));
   });
 
   // -------------------------------------------------- section navigation
   const links = $$('[data-section-link]');
   const navBar = $('[data-section-nav]');
-  const setActive = function (key) {
-    links.forEach(function (a) {
+  const setActive = (key) => {
+    links.forEach((a) => {
       const on = a.getAttribute('data-section-link') === key;
       a.setAttribute('aria-current', on ? 'true' : 'false');
       if (on && navBar && navBar.scrollWidth > navBar.clientWidth) {
@@ -786,9 +802,9 @@ export function initProfileEditor() {
       }
     });
   };
-  links.forEach(function (a) {
-    a.addEventListener('click', function (e) {
-      const target = sectionEl(a.getAttribute('data-section-link'));
+  links.forEach((a) => {
+    a.addEventListener('click', (e) => {
+      const target = $('[data-profile-section][data-section="' + a.getAttribute('data-section-link') + '"]');
       if (!target) return;
       e.preventDefault();
       target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
@@ -799,29 +815,21 @@ export function initProfileEditor() {
   if (sectionEls.length && 'IntersectionObserver' in window) {
     // The current section is the first one crossing a band near the top.
     const inBand = new Set();
-    const io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
         if (en.isIntersecting) inBand.add(en.target); else inBand.delete(en.target);
       });
-      const current = sectionEls.filter(function (s) { return inBand.has(s); })[0];
+      const current = sectionEls.filter((s) => inBand.has(s))[0];
       if (current) setActive(current.getAttribute('data-section'));
     }, { rootMargin: '-15% 0% -70% 0%', threshold: 0 });
-    sectionEls.forEach(function (s) { io.observe(s); });
+    sectionEls.forEach((s) => io.observe(s));
   }
 
-  // /profile.php?step=<key> (dashboard "next step" links) opens that editor.
+  // /profile.php?step=lab:<field> (dashboard "next step" links) opens that field.
   const wanted = new URLSearchParams(window.location.search).get('step');
   if (wanted) {
     history.replaceState(null, '', window.location.pathname);
     const parts = wanted.split(':');
-    if (parts[0] === 'photo') {
-      // A file picker cannot be opened without a click; point at the button.
-      const btn = $('[data-photo-upload]');
-      reveal(btn); focusQuietly(btn);
-    } else if (parts[0] === 'basics' && basicDefs[parts[1]]) {
-      editBasics($('[data-value-card][data-field="' + parts[1] + '"]'));
-    } else if (parts[0] === 'section' && sectionDefs[parts[1]]) {
-      addRow(parts[1]);
-    }
+    if (parts[0] === 'lab') openField(parts[1]);
   }
 }

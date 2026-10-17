@@ -16,7 +16,7 @@
  *
  * Side effects on success:
  *   - session_regenerate_id(true)
- *   - sets $_SESSION['user_id' | 'user_role' | 'user_roles' | 'user_name' | 'user_username']
+ *   - sets $_SESSION['user_id' | 'user_role' | 'user_roles' | 'user_name']
  *   - log_activity($userId, 'login', $chosenRole)
  *   - 302 → /dashboard.php
  */
@@ -57,14 +57,13 @@ if (isset($_GET['restored']) && $_GET['restored'] === '1') {
  * and redirect to the dashboard. Used by both the single-role auto-pick
  * path and the multi-role picker path.
  */
-function finalize_login(int $userId, string $name, string $username, array $roles, string $chosenRole): void
+function finalize_login(int $userId, string $name, array $roles, string $chosenRole): void
 {
     session_regenerate_id(true);
     $_SESSION['user_id']       = $userId;
     $_SESSION['user_role']     = $chosenRole;
     $_SESSION['user_roles']    = $roles;
     $_SESSION['user_name']     = $name;
-    $_SESSION['user_username'] = $username;
     unset($_SESSION['_pending_user']);
     log_activity($userId, 'login', $chosenRole);
 
@@ -120,7 +119,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 finalize_login(
                     (int)$pendingUser['id'],
                     (string)$pendingUser['name'],
-                    (string)($pendingUser['username'] ?? ''),
                     $freshRoles,
                     $v['value']
                 );
@@ -156,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors['email'] = 'Too many failed attempts. Please try again in a few minutes.';
             }
 
-            $st = $pdo->prepare('SELECT id, name, email, username, password_hash FROM users WHERE email = :e LIMIT 1');
+            $st = $pdo->prepare('SELECT id, name, email, password_hash FROM users WHERE email = :e LIMIT 1');
             $st->execute(['e' => $email]);
             $u = $st->fetch();
             $submittedPassword = (string)$_POST['password'];
@@ -177,7 +175,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     finalize_login(
                         (int)$u['id'],
                         (string)$u['name'],
-                        (string)($u['username'] ?? ''),
                         $roles,
                         $roles[0]
                     );
@@ -188,7 +185,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['_pending_user'] = [
                         'id'       => (int)$u['id'],
                         'name'     => (string)$u['name'],
-                        'username' => (string)($u['username'] ?? ''),
                         'email'    => (string)$u['email'],
                         'roles'    => $roles,
                     ];
@@ -281,7 +277,7 @@ $displayOrder = ['admin', 'teacher', 'student'];
         <div class="field">
           <label class="label" for="password">
             Password
-            <a class="ml-auto text-[0.8125rem] font-normal" href="<?= e(url_forgot()) ?>">Forgot password?</a>
+            <a class="ml-auto text-sm font-normal" href="<?= e(url_forgot()) ?>">Forgot password?</a>
           </label>
           <div class="password-field" x-data="{ show: false }">
             <input class="input" id="password" name="password" type="password" :type="show ? 'text' : 'password'" autocomplete="current-password" required

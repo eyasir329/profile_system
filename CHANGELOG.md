@@ -11,6 +11,139 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Resources, entries, completed courses and a larger type scale
+
+- **Profile split into sections** with an "On this page" side nav:
+  Personal, Study, Research, Completed theses, Journal papers, Conference
+  papers, Publications & awards, Courses.
+- **Entries.** Completed theses, journal papers and conference papers are
+  now lists the student adds to, edits and deletes one by one (migration
+  `023`). The Students sheet still shows the workbook's text, rebuilt from
+  the entries (`[Level: Title]`, `{published}(submitted)`).
+- **Publications and awards** from the second workbook: one tabbed
+  section (Journals, Proceedings, Presentations, Awards) with cards, BibTeX
+  copy, and a "Fill citation and month from BibTeX" helper (migration
+  `024`).
+- **Enrolled year and month are editable** by the student, from the
+  workbook's choices (year 2022 to next year; month April, October,
+  Other; migration `022`).
+- **Resources page** (`/resources.php`), linked for every role: Templates
+  and Open data and code (teachers edit, students read; migration `025`),
+  Potential journals (one text block each; students take or release them
+  and see who took what; migration `028`, `029`), and read-only tabs of
+  everyone's PublishedJournals, Conf.Proceedings, Conf.PresentationOnly
+  and Awards, with full screen.
+- **Completed courses.** A student marks the current course completed
+  (undo while it is current) and can add the next one only afterwards, one
+  course at a time. The Students sheet has a Current students tab and a
+  Completed tab with one fixed row per completed course, from a copy of
+  the student's details saved at completion (migrations `026`, `027`).
+- **Students sheet** follows the workbook: its exact header text and
+  column order, rows grouped by course (D3 to R), empty cells blank, paper
+  columns listing each paper, alternating row colours, and a numbered list
+  with dividers wherever a cell holds several items.
+- **Teachers and admins** get a plain "My account" page: lab details show
+  only while acting as a student.
+- **UI:** base text 16 px (was 15), small text 14 px (was 13), headings
+  bold; Resources tabs wrap as pills so none is hidden; student dashboard
+  has "Your lab" shortcut tiles with live counts; smaller phone header on
+  the profile.
+- **Docs:** `docs/PERMISSIONS.md` added; README, DESIGN, COMPONENTS and
+  FRONTEND updated.
+- **Known gap:** the app sends no email. In production a password-reset
+  request is stored but never delivered; an admin sets a new password on
+  the user's page instead.
+
+### Each role sees only what it needs
+
+Lab details are a student's profile. Teachers and admins have none, so
+the app no longer shows them any.
+
+| | Student | Teacher | Admin |
+| --- | --- | --- | --- |
+| Top bar | Dashboard, My profile | Dashboard, Students, Invitations | Dashboard, Users, Invitations |
+| Dashboard | Lab details progress and next fields | Students: how many, who still has details to fill in | Account counts by role, deactivated, open invitations |
+| Profile page | Lab details and Courses | Name, email, roles and a link to Settings | Same as teacher |
+
+- "My profile" is in the account menu for anyone who holds the student
+  role, so a teacher who is also a student reaches it without switching.
+- `/profile.php` refuses every save from an account without the student
+  role (403).
+- **Users (admin):** the list marks non-students instead of showing an
+  empty course and 0%. The sheet is the students' workbook, so it lists
+  students only; the list view still shows everyone. A person's page
+  shows lab details and courses only for students.
+- **Admin user form:** the Lab details card appears only while the
+  Student role is ticked.
+- The activity list words invitation and admin actions in plain language.
+
+### Course history and automatic enrolment dates
+
+- **A person can be in several courses over time.** The profile has a
+  *Courses* list: "Add course" starts a new one (it becomes the current
+  course), earlier ones stay, and a past one can be removed. Editing the
+  *Course* field corrects the current course without adding a row.
+- **The enrolment date is filled in automatically**: the day the
+  invitation link was generated for the first course, the day the course
+  was added for later ones. Users cannot type it; an admin can correct
+  the current one on the user form.
+- The sheet's Course / Enrolled columns show the current course.
+  Teachers and admins see the full history on a person's page once
+  there is more than one course.
+- **Database** (migration `021_course_enrollments.sql`, additive): new
+  `course_enrollments` table; `profiles.course` and the enrolled columns
+  mirror its newest row. Missing enrolment dates were backfilled from
+  the invitation date (or the account's creation date).
+
+### One email, no usernames, more fields the user can edit
+
+- **The sign-up email is the sheet's University email.** There is one
+  email per account; the separate `profiles.university_email` is gone.
+  It can be changed on the profile or in Settings, must be unique, and
+  changing it changes the sign-in address.
+- **Course and student ID are editable by their owner** on the profile
+  (course from a list; student ID checked for format and uniqueness).
+  Neither can be left empty. Only the enrolment date stays admin-only.
+- **Usernames are removed** from registration, Settings, the admin form,
+  the directory, search and the top bar. People are identified by name,
+  email and student ID.
+- **Database** (migration `020_single_email_no_username.sql`,
+  destructive): drops `users.username` and `profiles.university_email`.
+- Fixed: saving Settings → Account failed after the profile type was
+  removed (a leftover reference); caught before release.
+
+### A profile is the lab details only
+
+The profile now holds exactly the columns of the lab's *Information of
+Lab Students* workbook. Everything else was removed from the app and
+the database.
+
+#### Removed
+- The nine profile sections (education, work experience, journal
+  articles, conference papers, awards, skills, certifications, research
+  interests, languages), and phone, address, profession, bio and photo.
+- The Bachelor / M.Sc. / PhD profile type (it only decided which
+  sections were shown): gone from registration, Settings, the admin
+  form and the directory filter.
+- **Database** (migration `019_lab_only_profile.sql`, destructive): the
+  nine section tables, `profiles.phone/address/profession/bio/photo`,
+  `users.degree_type`, activity rows about the removed things, and
+  spent password-reset tokens. Uploaded photo files were deleted.
+- Code: `src/includes/profile_sections.php` and `render_sections.php`
+  (replaced by `lab_fields.php`), the entry renderers in `ui.php`, eight
+  unused validators, most of the profile editor script, and the CSS for
+  entries, tags and the photo control.
+- `docs/DIRECTORY.md` and the long, outdated README (rewritten).
+
+#### Changed
+- `/profile.php` is one list of lab fields with a "filled in" meter.
+- Completeness everywhere (dashboard, Users list) is the share of lab
+  fields filled in.
+- One person's page in the directory shows the lab details (admins also
+  see the account facts).
+- The admin Users sheet shows the account columns followed by the
+  workbook's columns.
+
 ### UI redesign: Tailwind CSS v4 + Alpine.js + Preline tokens
 
 Every page was rebuilt on a new design system. No routes, database tables
@@ -45,6 +178,28 @@ or server-side behaviour changed.
 - **Confirm dialog** opens with focus on Cancel for destructive actions.
 - The old `public/assets/css/app.css` and `js/app.js` are now build
   output. The hand-written originals are in `backups/pre-tailwind/`.
+
+- **Registering through a student invitation now requires Course and
+  Student ID.** Both are saved to the new profile; a student ID already
+  used by another account is rejected.
+- **Your own profile now shows everything staff can see about you**: a
+  read-only *Lab details* section (the 13 lab fields admins maintain) and
+  a read-only *Account* section (email and verification, roles, profile
+  type, status, two-factor, joined date).
+- **Lab details are editable by their owner, with server-enforced
+  permissions.** Names, university email, research title, next step,
+  previous university, completed thesis and paper counts save in place on
+  the profile (`op=update_lab`). Course, student ID and enrolment stay
+  admin-only and are refused with a 403 if posted. See
+  [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md).
+- **Students directory (teachers) is sheet-only**: the list view and the
+  List / Full sheet switch are removed there. Admins keep both on Users.
+- **The teacher's sheet shows only the columns of the lab workbook**
+  (*Information of Lab Students.xlsx*), in the workbook's order: Course,
+  Student ID, Full name (Japanese), Full name (English), University email,
+  Current research title, Enrolled year, Enrolled month, Next step (進路),
+  Previous univ / level, Completed thesis titles, Journal papers,
+  Conference papers. The English name links to the student's profile.
 
 #### Fixed
 - Log in: a "role no longer available" error from the role picker was

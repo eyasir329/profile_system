@@ -55,7 +55,7 @@
     @apply bg-muted text-foreground;
   }
   .nav-drawer-label {
-    @apply mt-3 mb-1 border-t border-navbar-line px-3 pt-3 text-xs font-medium text-muted-foreground-1;
+    @apply mt-3 mb-1 border-t border-navbar-line px-3 pt-3 text-sm font-bold text-foreground;
   }
 
   /* ---- Dropdown menu (Alpine: x-data="dropdown") ---- */
@@ -128,7 +128,7 @@
     @apply ml-auto pl-3 text-xs font-normal text-muted-foreground-1 tabular-nums;
   }
   .side-nav-title {
-    @apply mb-2 hidden px-3 text-xs font-medium text-muted-foreground-1 lg:block;
+    @apply mb-2 hidden px-3 text-sm font-bold text-foreground lg:block;
   }
 
   /* ---- Segmented switch: two or three mutually exclusive views ---- */
@@ -140,7 +140,7 @@
     border-color: var(--color-gray-700);
   }
   .segmented a {
-    @apply flex h-[1.6875rem] items-center rounded-sm px-2.5 text-[0.8125rem] font-medium text-muted-foreground-2 no-underline hover:text-foreground;
+    @apply flex h-[1.6875rem] items-center rounded-sm px-2.5 text-sm font-medium text-muted-foreground-2 no-underline hover:text-foreground;
   }
   .segmented a[aria-current="true"] {
     @apply bg-surface text-foreground;
@@ -154,7 +154,7 @@
     @apply mt-auto border-t border-layer-line;
   }
   .site-footer-inner {
-    @apply mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-5 text-[0.8125rem] text-muted-foreground-1 sm:px-6;
+    @apply mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-5 text-sm text-muted-foreground-1 sm:px-6;
   }
   .site-footer a {
     @apply text-muted-foreground-2 decoration-transparent hover:text-foreground hover:decoration-current;

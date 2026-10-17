@@ -17,8 +17,8 @@ page header.
 | Class | Width | Used by |
 | --- | --- | --- |
 | `.page-narrow` | 27 rem | Log in, register, password reset, 2FA code, notices |
-| `.page` | 64 rem | Dashboard, settings, invitations, admin user form, one person's profile |
-| `.page-wide` | 80 rem | Landing, own profile, directory |
+| `.page` | 64 rem | Dashboard, own profile, settings, invitations, admin user form, one person |
+| `.page-wide` | 80 rem | Landing, directory |
 
 ```php
 <div class="page">
@@ -168,25 +168,30 @@ and courses are plain `.badge`.
 - **Menu** (`.menu-wrap`, `.menu-trigger`, `.menu`, `.menu-item`,
   `.menu-label`, `.menu-sep`): a dropdown driven by `x-data="dropdown"`.
   Copy the account menu in `header.php`.
-- **Side navigation** (`.side-nav`, `.side-nav-item`, `.side-nav-count`):
-  a vertical list from `lg`, a scrolling strip below. Mark the current
-  item with `aria-current="page"` (or `"true"` for in-page sections).
+- **Side navigation** (`.side-nav`, `.side-nav-item`): the settings
+  sections. A vertical list from `lg`, a scrolling strip below. Mark the
+  current item with `aria-current="page"`.
 - **Segmented switch** (`.segmented`): two or three views of the same
   data; the current link has `aria-current="true"`.
+- **Sheet tabs** (`.sheet-tabs`): links styled as underlined tabs, current
+  one `aria-current="page"`, with an optional `.tab-count`. Add
+  `.is-wrap` when there are many (they wrap as pills, none hidden) and
+  `.is-compact` inside the full-screen bar. Used by the Students sheet and
+  `/resources.php`.
 
 ## Data
 
-**Avatar**: `<?= ui_avatar($photo, $name, 'avatar-sm') ?>`. Sizes
+**Avatar**: `<?= ui_avatar(null, $name, 'avatar-sm') ?>` shows the first letter of the name (there are no profile photos). Sizes
 `avatar-sm` 28, default 36, `avatar-lg` 56, `avatar-xl` 88.
 
 **Person** (avatar, name, secondary line):
 
 ```php
 <a class="person" href="...">
-  <?= ui_avatar($u['photo'], $u['name']) ?>
+  <?= ui_avatar(null, $u['name']) ?>
   <span class="min-w-0">
     <span class="person-name">Aiko Tanaka</span>
-    <span class="person-sub">@aiko · ID 24M1042</span>
+    <span class="person-sub">ID 24M1042</span>
   </span>
 </a>
 ```
@@ -217,6 +222,20 @@ Cell helpers: `.nowrap`, `.pre` (keeps line breaks), `.num`,
 per pair. `.is-single` forces one column; `.is-stacked` puts long values
 under their label.
 
+**Alternating rows**: every `.sheet` table stripes even rows in a tint of
+the primary colour (`--stripe`, opaque so the pinned first column stays
+readable). A row with `class="is-mine"` is tinted more, in two shades.
+Hover wins over both.
+
+**Several items in one cell** (`.multi`): `ui_multi($items)` returns plain
+text for one item and a numbered `<ol class="multi">` with dashed dividers
+for several. Use it wherever a cell or field can hold more than one item
+(theses, papers, award recipients).
+
+**Tiles** (`.tile-grid`, `.tile`, `.tile-icon`, `.tile-title`,
+`.tile-value`): link cards with an icon, a title and a live number; the
+student dashboard's "Your lab".
+
 **Copy box**:
 
 ```php
@@ -245,22 +264,22 @@ Do not add more dialogs to pages.
 
 ## Profile
 
-Used by `/profile.php` and, read-only, by the directory.
+Used by `/profile.php`.
 
 | Class | Use |
 | --- | --- |
-| `.identity`, `.identity-body`, `.identity-name`, `.identity-meta`, `.identity-headline`, `.identity-actions` | Photo, name, handle, headline |
-| `.photo-zone`, `.photo-zone-btn` | Avatar with camera button and drop target |
-| `.completion`, `.step-list`, `.step` | Completeness panel and suggested next steps |
-| `.profile-layout`, `.profile-nav` | Section list plus content |
-| `.value-card` | One basics field: label, value, Edit |
-| `.entry-list`, `.entry`, `.entry-body`, `.entry-title`, `.entry-sub`, `.entry-meta`, `.entry-text`, `.entry-links`, `.entry-actions` | One row of a repeating section |
-| `.entry-list[data-layout="tags"]`, `.tag-name`, `.tag-level` | Skills, languages, research interests as chips |
-| `.section-empty` | "Add your first ..." button |
-| `.inline-form`, `.draft` | The form the editor builds in place |
+| `.identity`, `.identity-body`, `.identity-name`, `.identity-meta`, `.identity-actions` | Avatar, name, email, course and student ID. Also the header of one person in the directory |
+| `.completion`, `.step-list`, `.step` | "Lab details filled in" panel and suggested next fields |
+| `.value-card`, `.value-card-label`, `.value-card-body` | One lab field: label, value, and either an Edit button or a "Set by admin" note |
+| `.inline-form` | The form the editor builds in place of the value |
+| `.entry-list`, `.entry`, `.entry-body`, `.entry-title`, `.entry-sub`, `.entry-meta`, `.entry-text`, `.entry-actions`, `.entry-action` | One entry of a repeating section (a thesis, paper, publication or award) with Edit and Delete |
+| `.entry-chips`, `.entry-citation`, `.entry-bibtex` | A publication card: date, type and impact-factor badges, the citation, folded BibTeX with a copy button |
+| `.entry-form` | An entry's form: three columns from `sm` up, each field sets `--span` (1 to 3) |
+| `.tab-list`, `.tab-count`, `.tab-panel-head` | Tabs inside a section (Publications & awards); `role="tablist"` buttons driven by the profile editor |
+| `.section-empty` | "Add your first …" button while a section has no entries |
 
-Entry markup always comes from `row_summary_html()` in `ui.php`; do not
-write it by hand.
+The fields themselves come from `lab_field_defs()` in
+`src/includes/lab_fields.php`; do not hard-code them in a template.
 
 ## PHP helpers
 
@@ -268,15 +287,15 @@ All in `src/includes/ui.php`. Each returns an HTML string.
 
 | Helper | Returns |
 | --- | --- |
-| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot expand collapse` |
-| `ui_avatar($photo, $name, $size = '')` | Photo or initial |
+| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot expand collapse cap book folder` |
+| `ui_avatar($photo, $name, $size = '')` | Initial avatar (pass `null` for the photo) |
 | `ui_role($role)`, `ui_roles($roles)` | Role with its dot; a list, or a "No role" badge |
 | `ui_alert($type, $html)` | Inline alert |
 | `ui_pw_toggle()` | Show / hide button for a password field |
 | `ui_progress($percent, $labelledBy = '')` | Progress bar |
+| `ui_multi($items)` | One item as text, several as a numbered list with dividers |
 | `ui_ago($seconds, $absolute)` | "5 minutes ago" |
 | `ui_activity($kind, $detail, $count)` | `[icon, sentence]` for an activity row |
-| `row_summary_parts()`, `row_summary_html()` | Read-only rendering of a profile entry |
 
 Icons are decorative (`aria-hidden`). Pair them with text, or put an
 `aria-label` on the button.

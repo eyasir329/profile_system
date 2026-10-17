@@ -16,7 +16,9 @@
  * here without one and becomes the admin.
  *
  * On success:
- *   - inserts `users` (+ invite_id), a blank `profiles` row and the roles
+ *   - inserts `users` (+ invite_id), a `profiles` row and the roles. When
+ *     the invitation grants the student role, the form also requires
+ *     Course and Student ID and stores them on that `profiles` row
  *   - counts one use on the invitation (row-locked, so a link cannot be
  *     used more often than allowed)
  *   - log_activity($userId, 'register', ...)
@@ -27,7 +29,7 @@ require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
-require_once __DIR__ . '/../src/includes/profile_sections.php';
+require_once __DIR__ . '/../src/includes/lab_fields.php';
 require_once __DIR__ . '/../src/includes/invites.php';
 
 $token     = (string)($_GET['invite'] ?? $_POST['invite'] ?? '');
@@ -50,8 +52,14 @@ if ($firstRun) {
 $canRegister = $firstRun || ($invite && $problem === '');
 $lockedEmail = $canRegister && $invite && !empty($invite['email']) ? (string)$invite['email'] : '';
 
+// An invitation that grants the student role also asks for the two lab
+// fields a teacher needs to recognise the student: course and student ID.
+// (Not on the first-run admin account, which has no invitation.)
+$COURSES   = LAB_COURSES;
+$asStudent = $canRegister && !$firstRun && in_array('student', $grantRoles ?? [], true);
+
 $errors = [];
-$values = ['name' => '', 'username' => '', 'email' => $lockedEmail, 'degree_type' => 'bachelor'];
+$values = ['name' => '', 'email' => $lockedEmail, 'course' => '', 'student_id' => ''];
 
 if ($canRegister && $_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -67,19 +75,27 @@ if ($canRegister && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
 
     $vName     = validate_name((string)($_POST['name'] ?? ''));
-    $vUsername = validate_username((string)($_POST['username'] ?? ''));
     $vEmail    = validate_email($lockedEmail !== '' ? $lockedEmail : (string)($_POST['email'] ?? ''));
     $vPw       = validate_password((string)($_POST['password'] ?? ''));
     $vPwC      = validate_password_confirm((string)($_POST['password'] ?? ''), (string)($_POST['confirm_password'] ?? ''));
-    $vDegree   = validate_degree_type((string)($_POST['degree_type'] ?? ''));
 
     $values = [
         'name'        => $vName['value'],
-        'username'    => $vUsername['value'],
         'email'       => $vEmail['value'],
-        'degree_type' => $vDegree['value'] ?: 'bachelor',
+        'course'      => $asStudent ? trim((string)($_POST['course'] ?? '')) : '',
+        'student_id'  => $asStudent ? trim((string)($_POST['student_id'] ?? '')) : '',
     ];
-    $errors = array_merge($vName['errors'], $vUsername['errors'], $vEmail['errors'], $vPw['errors'], $vPwC['errors'], $vDegree['errors']);
+    $errors = array_merge($vName['errors'], $vEmail['errors'], $vPw['errors'], $vPwC['errors']);
+    if ($asStudent) {
+        if (!in_array($values['course'], $COURSES, true)) {
+            $errors['course'] = 'Choose your course from the list.';
+        }
+        if ($values['student_id'] === '') {
+            $errors['student_id'] = 'Enter your student ID.';
+        } elseif (($idProblem = student_id_problem($pdo, $values['student_id'])) !== '') {
+            $errors['student_id'] = $idProblem;
+        }
+    }
     if (!isset($errors['email'])) {
         $dup = $pdo->prepare('SELECT 1 FROM users WHERE email = :e');
         $dup->execute(['e' => $values['email']]);
@@ -110,18 +126,26 @@ if ($canRegister && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->prepare(
-                'INSERT INTO users (name, username, email, password_hash, degree_type, invite_id)
-                 VALUES (:n, :u, :e, :p, :d, :i)'
+                'INSERT INTO users (name, email, password_hash, invite_id)
+                 VALUES (:n, :e, :p, :i)'
             )->execute([
                 'n' => $values['name'],
-                'u' => $values['username'],
                 'e' => $values['email'],
                 'p' => password_hash($vPw['value'], PASSWORD_DEFAULT),
-                'd' => $values['degree_type'],
                 'i' => $invite ? (int)$invite['id'] : null,
             ]);
             $userId = (int)$pdo->lastInsertId();
-            $pdo->prepare('INSERT INTO profiles (user_id) VALUES (:u)')->execute(['u' => $userId]);
+            // Only when the invitation still grants the student role (it was
+            // re-read under the lock above).
+            $withLab = $asStudent && in_array('student', $grantRoles, true);
+            $pdo->prepare('INSERT INTO profiles (user_id, student_id) VALUES (:u, :s)')->execute([
+                'u' => $userId,
+                's' => $withLab ? $values['student_id'] : null,
+            ]);
+            if ($withLab) {
+                // Enrolled = the day the invitation link was generated.
+                enrollment_add($pdo, $userId, $values['course'], (string)($invite['created_at'] ?? ''));
+            }
 
             $roleIns = $pdo->prepare('INSERT INTO user_roles (user_id, role) VALUES (:u, :r)');
             foreach ($grantRoles as $r) {
@@ -132,7 +156,7 @@ if ($canRegister && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $pdo->commit();
-            log_activity($userId, 'register', 'degree=' . $values['degree_type'] . ';roles=' . implode(',', $grantRoles)
+            log_activity($userId, 'register', 'roles=' . implode(',', $grantRoles)
                 . ($invite ? ';invite=' . (int)$invite['id'] : ';first-run'));
             // Successful registration: clear any earlier failed
             // attempts from this IP so retries aren't penalised.
@@ -205,35 +229,36 @@ $errorLine = fn(string $k): string => isset($errors[$k]) ? '<p class="field-erro
       </div>
 
       <div class="field">
-        <label class="label" for="username">Username</label>
-        <div class="input-affix">
-          <span class="affix" aria-hidden="true">@</span>
-          <input class="input" id="username" name="username" type="text" required minlength="3" maxlength="40"
-                 autocomplete="username" autocapitalize="none" spellcheck="false"
-                 value="<?= e($values['username']) ?>"<?= $invalid('username') ?> aria-describedby="username-hint username-err">
-        </div>
-        <p class="hint" id="username-hint">3 to 40 letters, numbers, hyphens or underscores.</p>
-        <?= $errorLine('username') ?>
-      </div>
-
-      <div class="field">
-        <label class="label" for="email">Email</label>
+        <label class="label" for="email">University email</label>
         <input class="input" id="email" name="email" type="email" required maxlength="150" autocomplete="email"
                value="<?= e($values['email']) ?>"<?= $lockedEmail !== '' ? ' readonly' : '' ?><?= $invalid('email') ?> aria-describedby="email-hint email-err">
         <p class="hint" id="email-hint"><?= $lockedEmail !== '' ? 'This invitation was sent to this address, so it cannot be changed.' : 'You will sign in with this address.' ?></p>
         <?= $errorLine('email') ?>
       </div>
 
-      <div class="field">
-        <label class="label" for="degree_type">Profile type</label>
-        <select class="select" id="degree_type" name="degree_type" required<?= $invalid('degree_type') ?> aria-describedby="degree-hint degree_type-err">
-          <?php foreach (DEGREE_TYPES as $dKey => $dLabel): ?>
-            <option value="<?= e($dKey) ?>"<?= $values['degree_type'] === $dKey ? ' selected' : '' ?>><?= e($dLabel) ?></option>
-          <?php endforeach; ?>
-        </select>
-        <p class="hint" id="degree-hint">Decides which sections your profile has. You can change it later in Settings.</p>
-        <?= $errorLine('degree_type') ?>
-      </div>
+      <?php if ($asStudent): ?>
+        <div class="form-grid">
+          <div class="field">
+            <label class="label" for="course">Course</label>
+            <select class="select" id="course" name="course" required<?= $invalid('course') ?> aria-describedby="course-hint course-err">
+              <option value=""<?= $values['course'] === '' ? ' selected' : '' ?> disabled>Choose…</option>
+              <?php foreach ($COURSES as $c): ?>
+                <option value="<?= e($c) ?>"<?= $values['course'] === $c ? ' selected' : '' ?>><?= e($c) ?></option>
+              <?php endforeach; ?>
+            </select>
+            <p class="hint" id="course-hint">D, M, B = year of study. R = research student.</p>
+            <?= $errorLine('course') ?>
+          </div>
+          <div class="field">
+            <label class="label" for="student_id">Student ID</label>
+            <input class="input" id="student_id" name="student_id" type="text" required maxlength="64"
+                   autocapitalize="characters" autocomplete="off" spellcheck="false"
+                   value="<?= e($values['student_id']) ?>"<?= $invalid('student_id') ?> aria-describedby="student_id-hint student_id-err">
+            <p class="hint" id="student_id-hint">As printed on your student card.</p>
+            <?= $errorLine('student_id') ?>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <div class="field">
         <label class="label" for="password">Password</label>

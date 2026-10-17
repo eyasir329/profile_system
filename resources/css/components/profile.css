@@ -1,44 +1,37 @@
 /*
- * Profile pages: the identity header, entries, tags and the inline editor
- * that resources/js/profile-editor.js builds. The same entry markup is used
- * read-only in the directory (src/includes/directory.php).
+ * Profile pages: the identity header, the completeness panel, the lab
+ * field rows and the inline form that resources/js/profile-editor.js builds.
  */
 @layer components {
   /* ---- Identity header ---- */
   .identity {
-    @apply mb-10 flex flex-wrap items-start gap-x-6 gap-y-5;
+    @apply mb-8 flex flex-wrap items-start gap-x-6 gap-y-4 sm:mb-10 sm:gap-y-5;
+  }
+  /* Phones: a smaller avatar next to the name, not a block above it. */
+  @media (width < 40rem) {
+    .identity > .avatar-xl {
+      @apply size-14 text-xl;
+    }
+    .identity-body {
+      @apply basis-40;
+    }
+    .identity-name {
+      @apply text-[1.625rem];
+    }
   }
   .identity-body {
     @apply min-w-0 flex-1 basis-64;
   }
   .identity-name {
-    @apply text-[1.75rem] leading-tight font-semibold tracking-[-0.01em];
+    @apply text-[2rem] leading-tight font-bold tracking-[-0.01em];
     font-family: var(--font-serif);
     font-variation-settings: "opsz" 32;
   }
   .identity-meta {
     @apply mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground-2;
   }
-  .identity-headline {
-    @apply mt-2 text-[0.9375rem];
-  }
   .identity-actions {
     @apply mt-4 flex flex-wrap gap-2;
-  }
-
-  /* Avatar with a camera button; also the drop target for a new photo. */
-  .photo-zone {
-    @apply relative rounded-full;
-  }
-  .photo-zone.is-dragover {
-    @apply outline-2 outline-offset-4 outline-primary outline-dashed;
-  }
-  .photo-zone.is-busy {
-    @apply animate-pulse;
-  }
-  .photo-zone-btn {
-    @apply absolute -right-1 -bottom-1 flex size-8 cursor-pointer items-center justify-center rounded-full border bg-layer text-muted-foreground-2 hover:text-foreground;
-    border-color: var(--color-line-3);
   }
 
   /* ---- Completion panel ---- */
@@ -52,13 +45,13 @@
     @apply text-base font-semibold tabular-nums;
   }
   .completion-detail {
-    @apply mt-2.5 text-[0.8125rem] text-muted-foreground-2;
+    @apply mt-2.5 text-sm text-muted-foreground-2;
   }
   .step-list {
     @apply mt-2 flex flex-col gap-1;
   }
   .step {
-    @apply flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.8125rem] font-medium text-primary no-underline hover:bg-muted-hover;
+    @apply flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary no-underline hover:bg-muted-hover;
   }
   .step .chev {
     @apply ml-auto text-muted-foreground-1;
@@ -72,13 +65,13 @@
     @apply sticky top-14 z-30 -mx-4 border-b border-layer-line bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:top-20 lg:mx-0 lg:self-start lg:border-0 lg:bg-transparent lg:p-0;
   }
   .profile-nav-note {
-    @apply mt-5 hidden px-3 text-[0.8125rem] leading-snug text-muted-foreground-1 lg:block;
+    @apply mt-5 hidden px-3 text-sm leading-snug text-muted-foreground-1 lg:block;
   }
   .side-nav-item.is-complete .side-nav-count {
     @apply text-muted-foreground-2;
   }
 
-  /* ---- Basics: label / value / edit, one per row ---- */
+  /* ---- One field: label / value / edit ---- */
   .value-card {
     @apply grid items-start gap-x-4 gap-y-1.5 border-b border-layer-line py-4;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -92,7 +85,7 @@
   }
   .value-card-label {
     grid-area: label;
-    @apply text-sm font-medium text-muted-foreground-2 sm:pt-px;
+    @apply text-sm font-semibold text-foreground sm:pt-px;
   }
   .value-card-body {
     grid-area: body;
@@ -121,39 +114,21 @@
     grid-area: body;
   }
 
-  /* ---- Entry: one row of a repeating section ---- */
+  /* ---- Entry: one row of a repeating section (theses, papers) ---- */
   .entry-list {
     @apply flex flex-col;
   }
   .entry {
     @apply relative flex items-start gap-4 border-b border-layer-line py-4;
   }
-  .entry.is-flash {
-    animation: entry-flash 1.6s ease-out;
-  }
   .entry-body {
     @apply min-w-0 flex-1;
   }
   .entry-title {
-    @apply font-medium;
-  }
-  .entry-sub {
-    @apply text-sm text-muted-foreground-2;
+    @apply font-semibold break-words;
   }
   .entry-meta {
-    @apply mt-0.5 text-[0.8125rem] text-muted-foreground-1;
-  }
-  .entry-text {
-    @apply mt-2 max-w-[70ch] text-sm whitespace-pre-line;
-  }
-  .entry-links {
-    @apply mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem];
-  }
-  .entry-links a {
-    @apply inline-flex items-center gap-1;
-  }
-  .entry-links .icon {
-    @apply size-3.5;
+    @apply mt-0.5 text-sm text-muted-foreground-1;
   }
   .entry-actions {
     @apply flex shrink-0 gap-0.5;
@@ -167,47 +142,63 @@
   .entry.is-editing {
     @apply block;
   }
-  @keyframes entry-flash {
-    from {
-      background: color-mix(in oklch, var(--primary) 12%, transparent);
-    }
+
+  .entry-sub {
+    @apply text-sm text-muted-foreground-2;
+  }
+  .entry-text {
+    @apply mt-1.5 max-w-[70ch] text-sm whitespace-pre-line;
   }
 
-  /* Tag sections (skills, languages, research interests): entries become chips. */
-  .entry-list[data-layout="tags"] {
-    @apply flex-row flex-wrap gap-2 py-4;
+  /* Publications: date / type / IF chips, the citation, folded BibTeX. */
+  .entry-chips {
+    @apply mb-1.5 flex flex-wrap gap-1.5;
   }
-  .entry-list[data-layout="tags"]:not(:has(*)) {
-    @apply hidden;
+  .entry-citation {
+    @apply max-w-[75ch] text-sm leading-relaxed break-words;
   }
-  .entry-list[data-layout="tags"] .entry {
-    @apply items-center gap-1 rounded-md border bg-layer py-1 pr-1 pl-3;
-    border-color: var(--color-line-2);
+  .entry-bibtex {
+    @apply mt-2 text-sm;
   }
-  .dark .entry-list[data-layout="tags"] .entry {
-    border-color: var(--color-gray-700);
+  .entry-bibtex summary {
+    @apply inline-flex cursor-pointer items-center gap-1 font-medium text-primary select-none;
   }
-  .entry-list[data-layout="tags"] .entry-body {
-    @apply flex items-baseline gap-2;
+  .entry-bibtex pre {
+    @apply mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 pr-20 font-mono text-xs whitespace-pre-wrap break-words;
   }
-  .entry-list[data-layout="tags"] .entry:not(:has(.entry-actions)) {
-    @apply pr-3;
+  .entry-copy {
+    @apply absolute top-1.5 right-1.5;
   }
-  .entry-list[data-layout="tags"] .entry-action {
-    @apply size-6;
+
+  /* Tabs inside a section (publications and awards). */
+  .tab-list {
+    @apply mt-4 flex gap-1 overflow-x-auto border-b border-layer-line;
   }
-  .entry-list[data-layout="tags"] .entry-action .icon {
-    @apply size-3.5;
+  .tab-list [role="tab"] {
+    @apply -mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground-2 hover:text-foreground;
   }
-  .entry-list[data-layout="tags"] .entry.is-editing,
-  .entry-list[data-layout="tags"] .draft {
-    @apply w-full basis-full border-0 bg-transparent p-0;
+  .tab-list [role="tab"][aria-selected="true"] {
+    @apply border-primary text-foreground;
   }
-  .tag-name {
-    @apply text-sm font-medium;
+  .tab-count {
+    @apply rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground-2;
   }
-  .tag-level {
-    @apply text-xs text-muted-foreground-1;
+  .tab-panel-head {
+    @apply flex items-start justify-between gap-4 pt-4 pb-1;
+  }
+
+  /* Entry form: three columns on wide screens; each field sets --span. */
+  @media (width >= 40rem) {
+    .inline-form.entry-form {
+      @apply grid grid-cols-3 gap-x-3 gap-y-3;
+    }
+    .inline-form.entry-form > .field {
+      @apply mt-0;
+      grid-column: span var(--span, 3) / span var(--span, 3);
+    }
+    .inline-form.entry-form > .form-actions {
+      @apply col-span-3;
+    }
   }
 
   /* "Add your first ..." button shown while a section has no entries. */
@@ -227,27 +218,10 @@
   .dark .inline-form {
     border-color: var(--color-gray-700);
   }
-  .draft {
-    @apply py-4;
+  .inline-form .form-actions {
+    @apply mt-3;
   }
-  .inline-form-title {
-    @apply mb-4 text-sm font-semibold;
-  }
-  .inline-form .form-grid > .is-full {
-    @apply sm:col-span-2;
-  }
-  .inline-form-foot {
-    @apply mt-1 flex flex-wrap items-center gap-3;
-  }
-  .inline-form-foot .form-actions {
-    @apply mt-0 ml-auto;
-  }
-  .inline-form-error {
-    @apply w-full text-[0.8125rem] font-medium text-danger;
-  }
-
-  /* ---- Directory: read-only profile ---- */
-  .bio {
-    @apply max-w-[70ch] py-4 whitespace-pre-line;
+  .inline-form .field + .field {
+    @apply mt-3;
   }
 }

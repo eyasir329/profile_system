@@ -388,7 +388,7 @@ function require_totp_or_login(): void
 function complete_totp_login(int $userId): void
 {
     $pdo = auth_pdo();
-    $st = $pdo->prepare('SELECT id, username, name FROM users WHERE id = :id AND deleted_at IS NULL');
+    $st = $pdo->prepare('SELECT id, name FROM users WHERE id = :id AND deleted_at IS NULL');
     $st->execute(['id' => $userId]);
     $u = $st->fetch();
     if (!$u) {
@@ -396,7 +396,6 @@ function complete_totp_login(int $userId): void
         exit;
     }
     $_SESSION['user_id']       = (int)$u['id'];
-    $_SESSION['user_username'] = (string)$u['username'];
     $_SESSION['user_name']     = (string)$u['name'];
     // Populate roles from `user_roles`.
     try {

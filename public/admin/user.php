@@ -8,13 +8,12 @@
  * Auth:   require_admin()
  * CSRF:   verify_csrf() on POST
  *
- * save        Account (name, username, email, profile type), roles, an
+ * save        Account (name, email), roles, an
  *             optional new password (required when creating) and the lab
- *             details. Everything else on a profile belongs to its owner.
+ *             details.
  * deactivate  Soft delete: sets deleted_at and a purge date 30 days out.
  * restore     Clears both, so the user can sign in again.
- * delete      Removes the user row; every related table cascades. The
- *             profile photo file is unlinked.
+ * delete      Removes the user row; the profile and related rows cascade.
  *
  * Safety rules, enforced here and reflected in the form:
  *   - an admin cannot deactivate or delete their own account, or drop
@@ -29,6 +28,7 @@ require_once __DIR__ . '/../../src/includes/auth.php';
 require_once __DIR__ . '/../../src/includes/db.php';
 require_once __DIR__ . '/../../src/includes/url.php';
 require_once __DIR__ . '/../../src/includes/validate.php';
+require_once __DIR__ . '/../../src/includes/lab_fields.php';
 require_once __DIR__ . '/../../src/includes/ui.php';
 require_admin();
 
@@ -41,29 +41,32 @@ $ROLES = [
     'teacher' => 'Also gets the read-only Students directory.',
     'admin'   => 'Also manages every user from this panel.',
 ];
-$COURSES = ['D1', 'D2', 'D3', 'M1', 'M2', 'B3', 'B4', 'R', 'Other'];
-$MONTHS  = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+$COURSES = LAB_COURSES;
+$MONTHS  = LAB_MONTHS;
 // Lab details: column => [label, kind, max length]
 $LAB = [
     'course'              => ['Course', 'course', 0],
     'student_id'          => ['Student ID', 'text', 64],
     'name_en'             => ['Name (EN)', 'text', 255],
     'name_jp'             => ['Name (JP)', 'text', 255],
-    'university_email'    => ['University email', 'email', 255],
     'enrolled_year'       => ['Enrolled year', 'year', 0],
     'enrolled_month'      => ['Enrolled month', 'month', 0],
     'next_step'           => ['Next step', 'text', 255],
     'previous_univ_level' => ['Previous university / level', 'text', 255],
     'research_title'      => ['Research title', 'textarea', 2000],
-    'completed_thesis'    => ['Completed thesis', 'textarea', 5000],
-    'journal_papers'      => ['Journal papers', 'textarea', 5000],
-    'conference_papers'   => ['Conference papers', 'textarea', 5000],
+];
+// Theses and papers are entries the student adds on their profile; the
+// text here is generated from them, so it is shown read-only.
+$LAB_ENTRIES = [
+    'completed_thesis'  => 'Completed thesis',
+    'journal_papers'    => 'Journal papers',
+    'conference_papers' => 'Conference papers',
 ];
 
 $user = null;
 if (!$isNew) {
     $st = $pdo->prepare(
-        'SELECT u.id, u.name, u.username, u.email, u.degree_type, u.deleted_at, u.scheduled_purge_at, u.created_at, p.*
+        'SELECT u.id, u.name, u.email, u.deleted_at, u.scheduled_purge_at, u.created_at, p.*
            FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = :id LIMIT 1'
     );
     $st->execute(['id' => $userId]);
@@ -90,9 +93,7 @@ $locked = $isSelf ? 'This is your own account.' : ($isLastAdmin ? 'This is the o
 
 $values = [
     'name'        => (string)($user['name'] ?? ''),
-    'username'    => (string)($user['username'] ?? ''),
     'email'       => (string)($user['email'] ?? ''),
-    'degree_type' => normalize_degree_type($user['degree_type'] ?? 'bachelor'),
     'roles'       => $isNew ? ['student'] : $currentRoles,
 ];
 foreach ($LAB as $col => $_) { $values[$col] = trim((string)($user[$col] ?? '')); }
@@ -109,22 +110,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'deactivate') {
             $pdo->prepare('UPDATE users SET deleted_at = NOW(), scheduled_purge_at = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE id = :id')
                 ->execute(['id' => $userId]);
-            log_activity($meId, 'admin_user_deactivate', '@' . $user['username']);
+            log_activity($meId, 'admin_user_deactivate', (string)$user['email']);
             header('Location: ' . url_admin() . '?done=deactivated');
             exit;
         } elseif ($action === 'restore') {
             $pdo->prepare('UPDATE users SET deleted_at = NULL, scheduled_purge_at = NULL WHERE id = :id')
                 ->execute(['id' => $userId]);
-            log_activity($meId, 'admin_user_restore', '@' . $user['username']);
+            log_activity($meId, 'admin_user_restore', (string)$user['email']);
             header('Location: ' . url_admin() . '?done=restored');
             exit;
         } else {
             $pdo->prepare('DELETE FROM users WHERE id = :id')->execute(['id' => $userId]);
-            if (!empty($user['photo'])) {
-                $file = __DIR__ . '/../' . $user['photo'];
-                if (is_file($file)) { @unlink($file); }
-            }
-            log_activity($meId, 'admin_user_delete', '@' . $user['username']);
+            log_activity($meId, 'admin_user_delete', (string)$user['email']);
             header('Location: ' . url_admin() . '?done=deleted');
             exit;
         }
@@ -133,17 +130,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ---- save (create or update) ----
     if ($action === 'save') {
         $vName     = validate_name((string)($_POST['name'] ?? ''));
-        $vUsername = validate_username((string)($_POST['username'] ?? ''), excludeUserId: $isNew ? null : $userId);
         $vEmail    = validate_email((string)($_POST['email'] ?? ''));
-        $vDegree   = validate_degree_type((string)($_POST['degree_type'] ?? ''));
         $rawRoles  = $_POST['roles'] ?? [];
         $vRoles    = validate_roles(is_array($rawRoles) ? $rawRoles : [], array_keys($ROLES));
         $values['name']        = $vName['value'];
-        $values['username']    = $vUsername['value'];
         $values['email']       = $vEmail['value'];
-        $values['degree_type'] = $vDegree['value'] ?: 'bachelor';
         $values['roles']       = $vRoles['value'];
-        $errors = array_merge($vName['errors'], $vUsername['errors'], $vEmail['errors'], $vDegree['errors']);
+        $errors = array_merge($vName['errors'], $vEmail['errors']);
         if ($vRoles['errors']) { $errors['roles'] = 'Choose at least one role.'; }
 
         if (!isset($errors['email'])) {
@@ -174,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $values[$col] = $v;
             if ($v === '') { $lab[$col] = null; continue; }
             if ($kind === 'course' && !in_array($v, $COURSES, true)) { $errors[$col] = 'Choose a course from the list.'; }
+            if ($col === 'student_id' && ($idProblem = student_id_problem($pdo, $v, $isNew ? null : $userId)) !== '') { $errors[$col] = $idProblem; }
             if ($kind === 'month'  && !in_array($v, $MONTHS, true))  { $errors[$col] = 'Choose a month from the list.'; }
             if ($kind === 'year'   && (!ctype_digit($v) || (int)$v < 1900 || (int)$v > 2100)) { $errors[$col] = 'Enter a four-digit year.'; }
             if ($kind === 'email'  && !filter_var($v, FILTER_VALIDATE_EMAIL)) { $errors[$col] = 'Enter a valid email address.'; }
@@ -185,17 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
                 if ($isNew) {
-                    $pdo->prepare('INSERT INTO users (name, username, email, password_hash, degree_type) VALUES (:n, :u, :e, :p, :d)')
+                    $pdo->prepare('INSERT INTO users (name, email, password_hash) VALUES (:n, :e, :p)')
                         ->execute([
-                            'n' => $values['name'], 'u' => $values['username'], 'e' => $values['email'],
-                            'p' => password_hash($password, PASSWORD_DEFAULT), 'd' => $values['degree_type'],
+                            'n' => $values['name'], 'e' => $values['email'],
+                            'p' => password_hash($password, PASSWORD_DEFAULT),
                         ]);
                     $userId = (int)$pdo->lastInsertId();
                 } else {
-                    $pdo->prepare('UPDATE users SET name = :n, username = :u, email = :e, degree_type = :d WHERE id = :id')
+                    $pdo->prepare('UPDATE users SET name = :n, email = :e WHERE id = :id')
                         ->execute([
-                            'n' => $values['name'], 'u' => $values['username'], 'e' => $values['email'],
-                            'd' => $values['degree_type'], 'id' => $userId,
+                            'n' => $values['name'], 'e' => $values['email'],
+                            'id' => $userId,
                         ]);
                     if ($password !== '') {
                         $pdo->prepare('UPDATE users SET password_hash = :p WHERE id = :id')
@@ -204,8 +198,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->prepare('INSERT IGNORE INTO profiles (user_id) VALUES (:u)')->execute(['u' => $userId]);
+                // A new account with a course but no date: enrolled today.
+                if ($isNew && !empty($lab['course']) && empty($lab['enrolled_year']) && empty($lab['enrolled_month'])) {
+                    $lab['enrolled_year']  = date('Y');
+                    $lab['enrolled_month'] = date('F');
+                }
                 $set = implode(', ', array_map(fn($c) => "`$c` = :$c", array_keys($lab)));
                 $pdo->prepare("UPDATE profiles SET $set WHERE user_id = :uid")->execute($lab + ['uid' => $userId]);
+                // A change to course or the enrolment date here is a correction of the current course.
+                enrollment_sync_current($pdo, $userId);
 
                 foreach (array_diff($currentRoles, $values['roles']) as $r) {
                     $pdo->prepare('DELETE FROM user_roles WHERE user_id = :u AND role = :r')->execute(['u' => $userId, 'r' => $r]);
@@ -217,12 +218,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ($isSelf) {
                     $_SESSION['user_name']     = $values['name'];
-                    $_SESSION['user_username'] = $values['username'];
                 }
                 if ($isNew) {
-                    log_activity($meId, 'admin_user_create', '@' . $values['username'] . ';roles=' . implode(',', $values['roles']));
+                    log_activity($meId, 'admin_user_create', $values['email'] . ';roles=' . implode(',', $values['roles']));
                 } else {
-                    log_activity($meId, 'admin_user_update', '@' . $values['username']);
+                    log_activity($meId, 'admin_user_update', $values['email']);
                     if (array_diff($currentRoles, $values['roles']) || array_diff($values['roles'], $currentRoles)) {
                         log_activity($userId, 'role_change', implode(',', $values['roles']));
                     }
@@ -258,7 +258,7 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
         <?php if ($isNew): ?>
           Creates an account that can sign in straight away with the email and password you set.
         <?php else: ?>
-          @<?= e($user['username']) ?> · joined <?= e(date('M j, Y', strtotime((string)$user['created_at']))) ?>
+          <?= e($user['email']) ?> · joined <?= e(date('M j, Y', strtotime((string)$user['created_at']))) ?>
           <?= $isSelf ? ' · this is you' : '' ?>
         <?php endif; ?>
       </p>
@@ -286,29 +286,10 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
           <?= $errorLine('name') ?>
         </div>
         <div class="field">
-          <label class="label" for="username">Username</label>
-          <div class="input-affix">
-            <span class="affix" aria-hidden="true">@</span>
-            <input class="input" id="username" name="username" type="text" required minlength="3" maxlength="40" autocapitalize="none" spellcheck="false"
-                   value="<?= e($values['username']) ?>"<?= $invalid('username') ?> aria-describedby="username-err">
-          </div>
-          <?= $errorLine('username') ?>
-        </div>
-        <div class="field">
-          <label class="label" for="email">Email</label>
+          <label class="label" for="email">University email</label>
           <input class="input" id="email" name="email" type="email" required maxlength="150" value="<?= e($values['email']) ?>"<?= $invalid('email') ?> aria-describedby="email-hint email-err">
-          <p class="hint" id="email-hint">Used to sign in.</p>
+          <p class="hint" id="email-hint">Used to sign in, and shown in the Students sheet.</p>
           <?= $errorLine('email') ?>
-        </div>
-        <div class="field">
-          <label class="label" for="degree_type">Profile type</label>
-          <select class="select" id="degree_type" name="degree_type"<?= $invalid('degree_type') ?>>
-            <?php foreach (DEGREE_TYPES as $dKey => $dLabel): ?>
-              <option value="<?= e($dKey) ?>"<?= $values['degree_type'] === $dKey ? ' selected' : '' ?>><?= e($dLabel) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <p class="hint">Decides which profile sections they have.</p>
-          <?= $errorLine('degree_type') ?>
         </div>
         <div class="field">
           <label class="label" for="password"><?= $isNew ? 'Password' : 'New password' ?></label>
@@ -326,6 +307,8 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
       </div>
     </section>
 
+    <!-- Lab details are a student's profile: shown only while Student is ticked. -->
+    <div x-data="{ student: <?= in_array('student', $values['roles'], true) ? 'true' : 'false' ?> }">
     <section class="card" aria-labelledby="adm-roles-h">
       <h2 class="card-title" id="adm-roles-h">Roles</h2>
       <p class="card-desc">A user can hold several roles and switches between them from the top bar.</p>
@@ -334,7 +317,7 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
             $mustKeep = $rKey === 'admin' && in_array('admin', $currentRoles, true) && ($isSelf || $isLastAdmin);
         ?>
           <label class="choice">
-            <input type="checkbox" name="roles[]" value="<?= e($rKey) ?>"<?= in_array($rKey, $values['roles'], true) ? ' checked' : '' ?><?= $mustKeep ? ' data-locked onclick="return false"' : '' ?>>
+            <input type="checkbox" name="roles[]" value="<?= e($rKey) ?>"<?= $rKey === 'student' ? ' @change="student = $event.target.checked"' : '' ?><?= in_array($rKey, $values['roles'], true) ? ' checked' : '' ?><?= $mustKeep ? ' data-locked onclick="return false"' : '' ?>>
             <span>
               <span class="choice-title"><?= ui_role($rKey) ?></span>
               <span class="choice-desc"><?= e($rDesc) ?><?= $mustKeep ? ' ' . e($isSelf ? 'You cannot remove this from yourself.' : 'The only active admin must keep it.') : '' ?></span>
@@ -345,9 +328,9 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
       <?= $errorLine('roles') ?>
     </section>
 
-    <section class="card" aria-labelledby="adm-lab-h">
+    <section class="card mt-5" aria-labelledby="adm-lab-h" x-show="student">
       <h2 class="card-title" id="adm-lab-h">Lab details</h2>
-      <p class="card-desc">Optional. Only admins can edit these; teachers see them in the Students directory.</p>
+      <p class="card-desc">These are the columns of the Students sheet. The user can edit them on their own profile. The enrolment date is filled in automatically (the day their invitation link was generated, or the day they added a course); correct it here if needed. Changing the course here corrects the current course; the user adds a new course from their profile.</p>
       <div class="form-grid">
         <?php foreach ($LAB as $col => [$label, $kind, $max]): ?>
           <div class="field<?= $kind === 'textarea' ? ' sm:col-span-2' : '' ?>">
@@ -369,8 +352,17 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
             <?= $errorLine($col) ?>
           </div>
         <?php endforeach; ?>
+        <?php if (!$isNew): foreach ($LAB_ENTRIES as $col => $label): $v = trim((string)($user[$col] ?? '')); ?>
+          <div class="field sm:col-span-2">
+            <span class="label"><?= e($label) ?></span>
+            <p class="text-sm whitespace-pre-line<?= $v === '' ? ' text-muted-foreground-1' : '' ?>"><?= e($v !== '' ? $v : 'None yet.') ?></p>
+          </div>
+        <?php endforeach; endif; ?>
       </div>
+      <p class="mt-4 text-sm text-muted-foreground-1">Completed theses and papers are entries the user adds on their own profile.</p>
     </section>
+
+    </div>
 
     <div class="form-actions">
       <span class="form-note" x-show="dirty" x-cloak>You have unsaved changes.</span>
@@ -414,11 +406,11 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
         <div class="action-row">
           <div>
             <strong>Delete permanently</strong>
-            <p>Removes the account, the profile, every entry on it and the photo. This cannot be undone.</p>
+            <p>Removes the account and its lab details. This cannot be undone.</p>
           </div>
           <form method="post" action="<?= e($formAction) ?>" x-confirm
                 data-confirm-title="Permanently delete <?= e($user['name']) ?>?"
-                data-confirm-body="The account (@<?= e($user['username']) ?>) and everything on its profile will be removed for good. There is no undo."
+                data-confirm-body="The account (<?= e($user['email']) ?>) and its lab details will be removed for good. There is no undo."
                 data-confirm-ok="Delete permanently">
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
             <input type="hidden" name="action" value="delete">

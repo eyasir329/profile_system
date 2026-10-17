@@ -279,4 +279,4 @@ rate-limiter is safe to run without the table — it just fails open.
 
 - `README.md` — full project documentation, including the Security
   Notes section.
-- `docs/DIRECTORY.md` — file-by-file tour of the project.
+- `README.md`, section Layout — a tour of the project's files.

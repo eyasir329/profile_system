@@ -58,26 +58,31 @@ $displayOrder  = ['admin', 'teacher', 'student'];
  * user "acting as student" does NOT see the Admin link just because
  * they happen to also hold the admin role.
  *
- * Common items (Dashboard, Profile) appear for every role; Settings and
- * Log out live in the account menu at the right end of the bar.
- * The 'teacher' role also gets Students (/students.php, the read-only
- * student directory) and the 'admin' role Users (/admin/index.php:
- * every user, with create / edit / delete), both right after Dashboard.
+ * Each role sees only what it works with:
+ *   student  Dashboard, My profile (their lab details), Resources (read-only)
+ *   teacher  Dashboard, Students (the sheet), Resources (edit), Invitations
+ *   admin    Dashboard, Users, Resources (edit), Invitations
+ * Settings and Log out live in the account menu at the right end of the
+ * bar, along with "My profile": lab details while acting as a student,
+ * a plain account page (no lab details) while acting as teacher or admin.
  */
 $NAV_ITEMS_BY_ROLE = [
     'student' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
-        ['href' => 'profile',     'label' => 'Profile',     'page' => 'profile'],
+        ['href' => 'profile',     'label' => 'My profile',  'page' => 'profile'],
+        ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
     ],
     'teacher' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
         ['href' => 'students',    'label' => 'Students',    'page' => 'students'],
-        ['href' => 'profile',     'label' => 'Profile',     'page' => 'profile'],
+        ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
+        ['href' => 'invites',     'label' => 'Invitations', 'page' => 'invites'],
     ],
     'admin' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
         ['href' => 'admin',       'label' => 'Users',       'page' => 'admin'],
-        ['href' => 'profile',     'label' => 'Profile',     'page' => 'profile'],
+        ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
+        ['href' => 'invites',     'label' => 'Invitations', 'page' => 'invites'],
     ],
 ];
 
@@ -92,6 +97,8 @@ $NAV_HREF_FOR = [
     'profile'   => 'url_profile',
     'settings'  => 'url_settings',
     'admin'     => 'url_admin',
+    'invites'   => 'url_invites',
+    'resources' => 'url_resources',
 ];
 
 /**
@@ -150,7 +157,6 @@ usort($sortedRoles, function ($a, $b) use ($displayOrder) {
     return ($ia === false ? 999 : $ia) <=> ($ib === false ? 999 : $ib);
 });
 $myFirstName = explode(' ', trim($myName))[0] ?: 'Account';
-$myUsername  = (string)($_SESSION['user_username'] ?? '');
 $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23233a6b'/%3E%3Cpath d='M11 23V9h6.2a4.4 4.4 0 0 1 0 8.8H11' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
 ?>
 <!doctype html>
@@ -235,7 +241,7 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
         </button>
         <div class="menu" role="menu" aria-label="Account" x-ref="menu" x-show="open" x-cloak x-transition.opacity.duration.100ms
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)">
-          <p class="menu-label truncate"><?= e($myName) ?><?= $myUsername !== '' ? ' · @' . e($myUsername) : '' ?></p>
+          <p class="menu-label truncate"><?= e($myName) ?></p>
           <a class="menu-item" role="menuitem" href="<?= e(url_profile()) ?>"><?= pf_icon('user') ?> My profile</a>
           <a class="menu-item" role="menuitem" href="<?= e(url_settings()) ?>"><?= pf_icon('settings') ?> Settings</a>
           <div class="menu-sep" role="separator"></div>
@@ -260,6 +266,9 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
       <?php foreach ($navLinks as [$url, $label, $isCurrent]): ?>
         <a href="<?= e($url) ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
       <?php endforeach; ?>
+      <?php if ($activeRole !== 'student'): ?>
+        <a href="<?= e(url_profile()) ?>"<?= $page_id === 'profile' ? ' aria-current="page"' : '' ?>>My profile</a>
+      <?php endif; ?>
       <a href="<?= e(url_settings()) ?>"<?= $page_id === 'settings' ? ' aria-current="page"' : '' ?>>Settings</a>
     </nav>
     <?php if ($showSwitcher): ?>
@@ -270,7 +279,7 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
           <input type="hidden" name="role" value="<?= e($r) ?>">
           <button type="submit" class="nav-drawer-item"<?= $r === $activeRole ? ' aria-current="true"' : '' ?>>
             <?= ui_role($r) ?>
-            <?php if ($r === $activeRole): ?><span class="faint ml-auto text-[0.8125rem] font-normal">Current</span><?php endif; ?>
+            <?php if ($r === $activeRole): ?><span class="faint ml-auto text-sm font-normal">Current</span><?php endif; ?>
           </button>
         </form>
       <?php endforeach; ?>

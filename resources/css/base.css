@@ -3,7 +3,7 @@
   html {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.6;
     scroll-padding-top: 5.5rem;
     -webkit-text-size-adjust: 100%;
@@ -95,7 +95,7 @@
     @apply mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4;
   }
   .page-title {
-    @apply text-[1.75rem] leading-tight font-semibold tracking-[-0.01em];
+    @apply text-[2rem] leading-tight font-bold tracking-[-0.01em];
     font-family: var(--font-serif);
     font-variation-settings: "opsz" 32;
   }

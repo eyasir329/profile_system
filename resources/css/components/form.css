@@ -19,7 +19,7 @@
     @apply mb-0;
   }
   .label {
-    @apply mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground;
+    @apply mb-1.5 flex items-center gap-2 text-sm font-semibold text-foreground;
   }
   .label .optional {
     @apply font-normal text-muted-foreground-1;
@@ -84,7 +84,7 @@
   }
 
   .hint {
-    @apply mt-1.5 text-[0.8125rem] leading-snug text-muted-foreground-1;
+    @apply mt-1.5 text-sm leading-snug text-muted-foreground-1;
   }
   .hint.is-ok {
     @apply text-success;
@@ -93,7 +93,7 @@
     @apply text-danger;
   }
   .field-error {
-    @apply mt-1.5 text-[0.8125rem] leading-snug font-medium text-danger;
+    @apply mt-1.5 text-sm leading-snug font-medium text-danger;
   }
   /* Help text on the left, character counter on the right. */
   .field-under {
@@ -128,7 +128,7 @@
     @apply pr-16;
   }
   .password-toggle {
-    @apply absolute inset-y-1 right-1 cursor-pointer rounded-sm px-2.5 text-[0.8125rem] font-medium text-muted-foreground-2 hover:bg-muted-hover hover:text-foreground;
+    @apply absolute inset-y-1 right-1 cursor-pointer rounded-sm px-2.5 text-sm font-medium text-muted-foreground-2 hover:bg-muted-hover hover:text-foreground;
   }
 
   /* Plain checkbox or radio with a label beside it. */
@@ -184,10 +184,10 @@
     @apply cursor-not-allowed opacity-60;
   }
   .choice-title {
-    @apply block text-sm font-medium text-foreground;
+    @apply block text-sm font-semibold text-foreground;
   }
   .choice-desc {
-    @apply mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground-2;
+    @apply mt-0.5 block text-sm leading-snug text-muted-foreground-2;
   }
 
   /* Two columns from the sm breakpoint; add .col-span-full to a field for a full row. */
@@ -206,7 +206,7 @@
     @apply justify-start;
   }
   .form-note {
-    @apply mr-auto text-[0.8125rem] text-muted-foreground-1;
+    @apply mr-auto text-sm text-muted-foreground-1;
   }
 
   /* Six-digit code entry. */

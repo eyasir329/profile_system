@@ -123,12 +123,12 @@ Rules:
 
 | Use | Family | Size / weight |
 | --- | --- | --- |
-| Page title (`.page-title`, `.identity-name`) | Source Serif 4 | 28 px / 600 |
-| Landing headline | Source Serif 4 | 40 to 52 px / 600 |
-| Section and card titles | IBM Plex Sans | 18 px and 16 px / 600 |
-| Body | IBM Plex Sans | 15 px / 400, line-height 1.6 |
-| Labels, buttons, table text | IBM Plex Sans | 14 px / 500 |
-| Hints, meta, badges | IBM Plex Sans | 13 px and 12 px |
+| Page title (`.page-title`, `.identity-name`) | Source Serif 4 | 32 px / 700 |
+| Landing headline | Source Serif 4 | 40 to 52 px / 700 |
+| Section and card titles | IBM Plex Sans | 20 px and 18 px / 700 |
+| Body | IBM Plex Sans | 16 px / 400, line-height 1.6 |
+| Labels, buttons, table text | IBM Plex Sans | 14 px / 600 (table headers 700) |
+| Hints, meta, badges | IBM Plex Sans | 14 px and 12 px |
 | Codes, keys, links to copy | system monospace | 0.9 em |
 
 Japanese text (the lab's "Name (JP)" field) falls back to the system CJK

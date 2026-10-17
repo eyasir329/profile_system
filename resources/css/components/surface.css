@@ -17,13 +17,13 @@
     @apply mb-4 flex items-baseline justify-between gap-4;
   }
   .card-title {
-    @apply flex flex-wrap items-center gap-2 text-base leading-snug font-semibold;
+    @apply flex flex-wrap items-center gap-2 text-lg leading-snug font-bold;
   }
   .card-desc {
     @apply mt-1 mb-5 max-w-[62ch] text-sm text-muted-foreground-2;
   }
   .card-link {
-    @apply text-[0.8125rem] font-medium;
+    @apply text-sm font-medium;
   }
   .card-danger {
     @apply border-danger-line;
@@ -39,10 +39,10 @@
     @apply mb-1 flex items-end justify-between gap-4 border-b border-layer-line pb-3;
   }
   .section-title {
-    @apply flex flex-wrap items-baseline gap-x-2.5 text-lg leading-snug font-semibold;
+    @apply flex flex-wrap items-baseline gap-x-2.5 text-xl leading-snug font-bold;
   }
   .section-count {
-    @apply text-[0.8125rem] font-normal text-muted-foreground-1;
+    @apply text-sm font-normal text-muted-foreground-1;
   }
   .section-desc {
     @apply mt-0.5 text-sm text-muted-foreground-2;
@@ -60,5 +60,25 @@
   }
   .action-row p {
     @apply mt-0.5 text-sm text-muted-foreground-2;
+  }
+
+  /* ---- Tiles: a grid of link cards, each with a live number (dashboard) ---- */
+  .tile-grid {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+  .tile {
+    @apply flex items-center gap-3.5 rounded-lg border border-card-line bg-card p-4 text-foreground no-underline hover:border-primary hover:bg-layer-hover;
+  }
+  .tile-icon {
+    @apply flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-primary;
+  }
+  .tile-title {
+    @apply block text-[0.9375rem] leading-snug font-bold;
+  }
+  .tile-value {
+    @apply mt-0.5 block text-sm text-muted-foreground-2;
+  }
+  .tile .chev {
+    @apply shrink-0 text-muted-foreground-1;
   }
 }

@@ -55,7 +55,7 @@ resources/
 │       ├── navigation.css .navbar .menu .side-nav .segmented .site-footer
 │       ├── data.css       .avatar .person .toolbar .table .sheet .facts .copy-box .steps
 │       ├── overlay.css    .modal .toast
-│       └── profile.css    .identity .completion .value-card .entry .inline-form
+│       └── profile.css    .identity .completion .value-card .inline-form
 ├── js/
 │   ├── app.js             entry: starts Alpine, flash toasts, first-error focus
 │   ├── ui.js              Alpine stores, directives, components
@@ -146,12 +146,23 @@ One-line state is written inline, for example the password toggle
 
 ### The profile editor
 
-`profile-editor.js` is plain DOM code, not Alpine. It builds a form on
-demand from the field metadata in `window.PS_VIEW_MODE`, posts one `op`
-at a time to `/profile.php`, and swaps in the HTML the server returns.
-Its contract with the markup is a set of `data-*` attributes listed at
-the top of the file; it never selects by class name, so restyling cannot
-break it.
+`profile-editor.js` is plain DOM code, not Alpine. Clicking Edit on a lab
+field builds a small form from that field's definition in
+`window.PS_VIEW_MODE.lab.fields`, posts `op=update_lab` to
+`/profile.php`, and updates the value and the completeness meter from
+the JSON reply. Its contract with the markup is a set of `data-*`
+attributes listed at the top of the file; it never selects by class
+name, so restyling cannot break it.
+
+It also drives the rest of My profile: **entries** (`data-entry-*`: add,
+edit and delete a thesis, paper, publication or award; every reply carries
+the section's rows, rendered by PHP, so there is one renderer), the
+**tabs** of Publications & awards (`data-tabs`, arrow-key navigation), the
+**course** actions (add, complete, remove; "Add course" is disabled until
+the current course is completed), the BibTeX **copy** button, and the
+**Fill from BibTeX** helper (`parseBibtex()` builds an IEEE-style citation
+and the month). The entry definitions reach it as
+`window.PS_VIEW_MODE.entries`, from `lab_entry_defs()`.
 
 ## Checking a change
 

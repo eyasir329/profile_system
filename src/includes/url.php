@@ -27,6 +27,7 @@ function url_admin(): string { return url_for('admin/index.php'); }
 function url_students(): string { return url_for('students.php'); }
 function url_admin_user(): string { return url_for('admin/user.php'); }
 function url_invites(): string { return url_for('invites.php'); }
+function url_resources(): string { return url_for('resources.php'); }
 function url_switch_role(): string { return url_for('switch_role.php'); }
 function url_forgot(): string { return url_for('forgot_password.php'); }
 function url_reset(): string  { return url_for('reset_password.php'); }
@@ -57,27 +58,4 @@ function current_user_role(): string
 function current_user_name(): string
 {
     return (string)($_SESSION['user_name'] ?? '');
-}
-
-/**
- * Convert a free-form name into a URL-safe username slug.
- * - Lowercase
- * - Replace whitespace with -
- * - Strip anything that's not [a-z0-9_-]
- * - Collapse repeated separators
- * - Trim to 40 chars
- */
-function username_slug(string $name): string
-{
-    $slug = strtolower(trim($name));
-    $slug = preg_replace('/\s+/u', '-', $slug) ?? '';
-    // transliterate common accented letters
-    $slug = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug) ?: $slug;
-    $slug = preg_replace('/[^a-z0-9_-]/', '', $slug) ?? '';
-    $slug = preg_replace('/-+/', '-', $slug) ?? '';
-    $slug = trim($slug, '-_');
-    if ($slug === '') {
-        $slug = 'user-' . substr(bin2hex(random_bytes(3)), 0, 6);
-    }
-    return substr($slug, 0, 40);
 }

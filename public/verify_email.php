@@ -23,7 +23,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{64}$/', $token)) {
     $hash = hash('sha256', $token);
     $pdo = auth_pdo();
     $st = $pdo->prepare(
-        'SELECT ev.*, u.username FROM email_verifications ev
+        'SELECT ev.*, u.name FROM email_verifications ev
            JOIN users u ON u.id = ev.user_id
           WHERE ev.token_hash = :h AND ev.used_at IS NULL
             AND ev.expires_at > NOW() LIMIT 1'

@@ -19,7 +19,7 @@ if ($token !== '' && preg_match('/^[a-f0-9]{64}$/', $token)) {
     $hash = hash('sha256', $token);
     $pdo = auth_pdo();
     $st = $pdo->prepare(
-        'SELECT ar.*, u.id AS user_id, u.username, u.name, u.deleted_at
+        'SELECT ar.*, u.id AS user_id, u.name, u.deleted_at
            FROM account_restorations ar
            JOIN users u ON u.id = ar.user_id
           WHERE ar.token_hash = :h AND ar.used_at IS NULL

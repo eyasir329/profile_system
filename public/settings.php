@@ -6,7 +6,7 @@
  * Auth:   require_login()
  * CSRF:   verify_csrf() on POST
  * Actions:
- *   - save_account:    update name/email/username/degree_type (and theme, if
+ *   - save_account:    update name/email (and theme, if
  *                      posted). Logs 'account_update'.
  *   - save_theme:      update the theme only. Logs 'theme_update'.
  *   - change_password: verify current password, hash + set new. Logs 'password_change'.
@@ -22,7 +22,7 @@ require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
-require_once __DIR__ . '/../src/includes/profile_sections.php';
+require_once __DIR__ . '/../src/includes/lab_fields.php';
 require_once __DIR__ . '/../src/includes/ui.php';
 require_login();
 
@@ -46,7 +46,7 @@ $flash = [];
 $errors = [];
 
 // Load current user + profile row.
-$st = $pdo->prepare('SELECT id, name, username, email, email_verified, degree_type FROM users WHERE id = :id LIMIT 1');
+$st = $pdo->prepare('SELECT id, name, email, email_verified FROM users WHERE id = :id LIMIT 1');
 $st->execute(['id' => $userId]);
 $me = $st->fetch();
 if (!$me) { $_SESSION = []; session_destroy(); header('Location: ' . url_login()); exit; }
@@ -57,9 +57,7 @@ $profRow = $prof->fetch() ?: ['theme' => 'light'];
 
 $values = [
     'name'        => $me['name'],
-    'username'    => $me['username'],
     'email'       => $me['email'],
-    'degree_type' => normalize_degree_type($me['degree_type'] ?? 'bachelor'),
     'theme'       => (string)($profRow['theme'] ?? 'light'),
 ];
 
@@ -81,14 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_account') {
         $vName     = validate_name((string)($_POST['name'] ?? ''));
-        $vUsername = validate_username((string)($_POST['username'] ?? ''), excludeUserId: $userId);
         $vEmail    = validate_email((string)($_POST['email'] ?? ''));
-        $vDegree   = validate_degree_type((string)($_POST['degree_type'] ?? ''));
         $values['name']        = $vName['value'];
-        $values['username']    = $vUsername['value'];
         $values['email']       = $vEmail['value'];
-        $values['degree_type'] = $vDegree['value'] ?: 'bachelor';
-        $errors = array_merge($errors, $vName['errors'], $vUsername['errors'], $vEmail['errors'], $vDegree['errors']);
+        $errors = array_merge($errors, $vName['errors'], $vEmail['errors']);
         $newTheme = null;
         if (isset($_POST['theme'])) {
             $vTheme = validate_select((string)$_POST['theme'], $THEMES, 'theme');
@@ -103,17 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($exists->fetch()) {
                     $errors['email'] = 'That email is already in use.';
                 } else {
-                    $upd = $pdo->prepare('UPDATE users SET name=:n, username=:u, email=:e, degree_type=:d WHERE id=:id');
+                    $upd = $pdo->prepare('UPDATE users SET name=:n, email=:e WHERE id=:id');
                     $upd->execute([
                         'n' => $values['name'],
-                        'u' => $values['username'],
                         'e' => $values['email'],
-                        'd' => $values['degree_type'],
                         'id' => $userId,
                     ]);
                     $_SESSION['user_name'] = $values['name'];
-                    $_SESSION['user_username'] = $values['username'];
-                    log_activity($userId, 'account_update', 'name/email/username/degree');
+                    log_activity($userId, 'account_update', 'name/email');
                     if ($newTheme !== null) { $saveTheme($newTheme); }
                     $done('account', 'account');
                 }
@@ -172,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$errors) {
             // Soft-delete: set deleted_at + scheduled_purge_at (30 days).
             // Create an account_restorations token for the user to come back.
-            $logDetail = $me['username'];
+            $logDetail = $me['email'];
             $pdo->prepare(
                 'UPDATE users SET deleted_at = NOW(), scheduled_purge_at = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE id = :id'
             )->execute(['id' => $userId]);
@@ -272,7 +263,7 @@ require __DIR__ . '/../src/includes/header.php';
 
         <section class="card" aria-labelledby="set-details-h">
           <h2 class="card-title" id="set-details-h">Personal details</h2>
-          <p class="card-desc">Your profession, bio and photo are edited on <a href="<?= e(url_profile()) ?>">your profile</a>.</p>
+          <p class="card-desc">Your lab details are on <a href="<?= e(url_profile()) ?>">your profile</a>.</p>
 
           <div class="field">
             <label class="label" for="name">Full name</label>
@@ -281,55 +272,15 @@ require __DIR__ . '/../src/includes/header.php';
             <?= $errorLine('name', 'name-err') ?>
           </div>
           <div class="field">
-            <label class="label" for="username">Username</label>
-            <div class="input-affix">
-              <span class="affix" aria-hidden="true">@</span>
-              <input class="input" id="username" name="username" type="text" required minlength="3" maxlength="40"
-                     autocomplete="username" autocapitalize="none" spellcheck="false"
-                     value="<?= e($values['username']) ?>"<?= $invalid('username') ?> aria-describedby="username-hint username-err">
-            </div>
-            <p class="hint" id="username-hint">3 to 40 letters, numbers, hyphens or underscores. This is your handle on the site.</p>
-            <?= $errorLine('username', 'username-err') ?>
-          </div>
-          <div class="field">
             <label class="label" for="email">
-              Email
+              University email
               <?php if ((int)$me['email_verified'] === 1): ?><span class="badge badge-success">Verified</span><?php endif; ?>
             </label>
             <input class="input" id="email" name="email" type="email" required maxlength="150" autocomplete="email"
                    value="<?= e($values['email']) ?>"<?= $invalid('email') ?> aria-describedby="email-hint email-err">
-            <p class="hint" id="email-hint">You sign in with this address.</p>
+            <p class="hint" id="email-hint">You sign in with this address, and it is the email your teachers see.</p>
             <?= $errorLine('email', 'email-err') ?>
           </div>
-        </section>
-
-        <section class="card" aria-labelledby="set-degree-h">
-          <h2 class="card-title" id="set-degree-h">Profile type</h2>
-          <p class="card-desc">Decides which sections your profile has. Switching never deletes anything: sections that no longer apply are hidden and come back if you switch again.</p>
-
-          <div class="choice-list" role="radiogroup" aria-labelledby="set-degree-h">
-            <?php
-            $baseTitles = array_map(fn($k) => $SECTIONS[$k]['title'], visible_sections('bachelor'));
-            foreach (DEGREE_TYPES as $dKey => $dLabel):
-                $titles = array_map(fn($k) => $SECTIONS[$k]['title'], visible_sections($dKey));
-                $extra  = array_values(array_diff($titles, $baseTitles));
-            ?>
-              <label class="choice">
-                <input type="radio" name="degree_type" value="<?= e($dKey) ?>"<?= $values['degree_type'] === $dKey ? ' checked' : '' ?>>
-                <span>
-                  <span class="choice-title"><?= e($dLabel) ?></span>
-                  <span class="choice-desc">
-                    <?php if ($extra): ?>
-                      Everything in Bachelor, plus <?= e(strtolower(implode(', ', $extra))) ?>.
-                    <?php else: ?>
-                      <?= e(implode(', ', $titles)) ?>.
-                    <?php endif; ?>
-                  </span>
-                </span>
-              </label>
-            <?php endforeach; ?>
-          </div>
-          <?= $errorLine('degree_type', 'degree-err') ?>
         </section>
 
         <div class="form-actions">
@@ -425,7 +376,7 @@ require __DIR__ . '/../src/includes/header.php';
             <details class="mb-5 rounded-md border border-layer-line"<?= $tfJustEnabled ? ' open' : '' ?>>
               <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Backup codes (<?= count($tfCodes) ?>)</summary>
               <div class="border-t border-layer-line px-4 py-4">
-                <p class="mb-3 text-[0.8125rem] text-muted-foreground-2">Each code works once if you lose access to your authenticator app.</p>
+                <p class="mb-3 text-sm text-muted-foreground-2">Each code works once if you lose access to your authenticator app.</p>
                 <ul class="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
                   <?php foreach ($tfCodes as $bc): ?>
                     <li><code class="text-sm"><?= e($bc) ?></code></li>

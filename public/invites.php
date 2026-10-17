@@ -136,7 +136,7 @@ if (($_GET['done'] ?? '') === 'revoked') { $flash[] = ['type' => 'success', 'bod
 
 // Existing invitations: own for a teacher, everyone's for an admin.
 $st = $pdo->prepare(
-    'SELECT i.*, c.name AS creator_name, c.username AS creator_username
+    'SELECT i.*, c.name AS creator_name
        FROM invites i LEFT JOIN users c ON c.id = i.created_by'
     . ($actAdmin ? '' : ' WHERE i.created_by = :me')
     . ' ORDER BY i.id DESC LIMIT 200'
@@ -177,7 +177,7 @@ require __DIR__ . '/../src/includes/header.php';
 
   <?php if ($fresh): ?>
     <section class="alert alert-success mb-8 block" aria-labelledby="inv-fresh-h">
-      <h2 class="flex items-center gap-2 font-semibold" id="inv-fresh-h"><?= pf_icon('check') ?> Invitation link created</h2>
+      <h2 class="flex items-center gap-2 font-bold" id="inv-fresh-h"><?= pf_icon('check') ?> Invitation link created</h2>
       <p class="mt-1 text-foreground">Copy it now and send it to the person you are inviting. For security it is shown <strong>only this once</strong>; if you lose it, cancel it below and create a new one.</p>
       <div class="copy-box mt-3">
         <span class="value bg-layer" data-invite-url><?= e($fresh['url']) ?></span>
@@ -281,7 +281,7 @@ require __DIR__ . '/../src/includes/header.php';
                   <?php if ($isFresh): ?><span class="badge badge-success">Just created</span><?php endif; ?>
                 </p>
                 <?php if (!empty($inv['note'])): ?><p class="mt-1.5 text-sm"><?= e($inv['note']) ?></p><?php endif; ?>
-                <p class="mt-1 text-[0.8125rem] text-muted-foreground-1">
+                <p class="mt-1 text-sm text-muted-foreground-1">
                   <?php if (!empty($inv['email'])): ?>Only for <?= e($inv['email']) ?> · <?php endif; ?>
                   Used <?= (int)$inv['used_count'] ?> of <?= (int)$inv['max_uses'] ?>
                   · <?= $state === 'expired' ? 'Expired' : 'Expires' ?> <?= e(date('M j, Y H:i', strtotime((string)$inv['expires_at']))) ?>
@@ -290,7 +290,7 @@ require __DIR__ . '/../src/includes/header.php';
                   <?php endif; ?>
                 </p>
                 <?php if ($names): ?>
-                  <p class="mt-0.5 text-[0.8125rem] text-muted-foreground-1">Joined: <?= e(implode(', ', $names)) ?></p>
+                  <p class="mt-0.5 text-sm text-muted-foreground-1">Joined: <?= e(implode(', ', $names)) ?></p>
                 <?php endif; ?>
               </div>
               <?php if ($state === 'active'): ?>

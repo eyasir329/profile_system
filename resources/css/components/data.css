@@ -29,7 +29,7 @@
     @apply text-primary underline underline-offset-[3px];
   }
   .person-sub {
-    @apply block truncate text-[0.8125rem] font-normal text-muted-foreground-1;
+    @apply block truncate text-sm font-normal text-muted-foreground-1;
   }
 
   /* ---- Toolbar: the filter row above a table ---- */
@@ -67,7 +67,7 @@
     @apply border-b border-table-line px-4 py-3 align-middle;
   }
   .table thead th {
-    @apply bg-muted py-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground-2;
+    @apply bg-muted py-2.5 text-sm font-bold whitespace-nowrap text-foreground;
   }
   .table tbody th {
     @apply font-normal;
@@ -108,7 +108,7 @@
     @apply flex w-28 items-center gap-2.5;
   }
   .meter-text {
-    @apply w-9 shrink-0 text-right text-[0.8125rem] text-muted-foreground-2 tabular-nums;
+    @apply w-9 shrink-0 text-right text-sm text-muted-foreground-2 tabular-nums;
   }
 
   /*
@@ -135,7 +135,7 @@
   }
   .sheet th,
   .sheet td {
-    @apply border-r border-table-line py-2.5 align-top text-[0.8125rem];
+    @apply border-r border-table-line py-2.5 align-top text-sm;
   }
   .sheet thead th {
     @apply sticky top-0 z-10;
@@ -150,6 +150,27 @@
   .sheet tbody tr:hover .pin {
     @apply bg-layer-hover;
   }
+
+  /* Alternate rows in two colours so neighbouring rows are easy to tell apart.
+     The tints are opaque: the pinned first column sticks over scrolled cells.
+     Later rules win over earlier ones: stripe < your row < hover. */
+  .sheet {
+    --stripe: color-mix(in oklch, var(--primary) 8%, var(--card));
+    --mine: color-mix(in oklch, var(--primary) 15%, var(--card));
+    --mine-alt: color-mix(in oklch, var(--primary) 24%, var(--card));
+  }
+  .sheet tbody tr:nth-child(even) > * {
+    background: var(--stripe);
+  }
+  .sheet tbody tr.is-mine > * {
+    background: var(--mine);
+  }
+  .sheet tbody tr.is-mine:nth-child(even) > * {
+    background: var(--mine-alt);
+  }
+  .sheet tbody tr:hover > * {
+    @apply bg-layer-hover;
+  }
   .sheet .wide {
     @apply min-w-72;
   }
@@ -161,6 +182,62 @@
   }
   .sheet .cell-extra {
     @apply block text-muted-foreground-1;
+  }
+  /* Sheet tabs: the workbook's sheets, above the sheet table. */
+  .sheet-tabs {
+    @apply mb-3 flex gap-1 overflow-x-auto border-b border-layer-line;
+  }
+  .sheet-tabs a {
+    @apply -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground-2 no-underline hover:text-foreground;
+  }
+  .sheet-tabs a[aria-current="page"] {
+    @apply border-primary text-foreground;
+  }
+  /* Many tabs (Resources): wrap onto more lines as pills, so none is hidden off-screen. */
+  .sheet-tabs.is-wrap {
+    @apply flex-wrap gap-2 overflow-visible border-b-0 pb-1;
+  }
+  .sheet-tabs.is-wrap a {
+    @apply mb-0 rounded-full border border-layer-line bg-card px-3.5 py-1.5;
+  }
+  .sheet-tabs.is-wrap a[aria-current="page"] {
+    @apply border-primary bg-primary text-primary-foreground;
+  }
+  .sheet-tabs.is-wrap a[aria-current="page"] .tab-count {
+    @apply bg-white/20 text-primary-foreground;
+  }
+  /* In the full-screen bar: same tabs, no rule underneath. */
+  .sheet-tabs.is-compact {
+    @apply mb-0 min-w-0 border-b-0;
+  }
+  .sheet-tabs.is-compact a {
+    @apply -my-2.5 py-2.5;
+  }
+  /* Several items in one cell or field (ui_multi): numbered, with a divider between. */
+  .multi {
+    counter-reset: item;
+    @apply m-0 list-none p-0;
+  }
+  .multi li {
+    counter-increment: item;
+    @apply relative py-1.5 pl-7;
+    border-top: 1px dashed color-mix(in oklch, currentColor 28%, transparent);
+  }
+  .multi li:first-child {
+    @apply pt-0;
+    border-top: 0;
+  }
+  .multi li:last-child {
+    @apply pb-0;
+  }
+  .multi li::before {
+    content: counter(item);
+    @apply absolute left-0 flex size-[1.25rem] items-center justify-center rounded-full text-xs leading-none font-bold tabular-nums text-primary;
+    top: 0.4rem;
+    background: color-mix(in oklch, var(--primary) 16%, transparent);
+  }
+  .multi li:first-child::before {
+    top: 0.1rem;
   }
   html.has-sheet-full {
     @apply overflow-hidden;
@@ -177,7 +254,7 @@
     @apply opacity-60;
   }
   .card-list-meta {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.8125rem] text-muted-foreground-2;
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground-2;
   }
 
   /* ---- Facts: label / value pairs ---- */
@@ -188,7 +265,7 @@
     @apply flex items-baseline justify-between gap-4 border-b border-layer-line py-2.5 text-sm;
   }
   .facts dt {
-    @apply shrink-0 text-muted-foreground-2;
+    @apply shrink-0 font-semibold text-muted-foreground-2;
   }
   .facts dd {
     @apply flex min-w-0 flex-wrap items-center justify-end gap-2 text-right break-words;
@@ -201,7 +278,7 @@
     @apply block;
   }
   .facts.is-stacked dt {
-    @apply text-[0.8125rem];
+    @apply text-sm;
   }
   .facts.is-stacked dd {
     @apply mt-0.5 justify-start text-left whitespace-pre-line;
@@ -212,7 +289,7 @@
     @apply flex items-stretch gap-2;
   }
   .copy-box .value {
-    @apply min-w-0 flex-1 rounded-md border border-layer-line bg-muted px-3 py-2 text-[0.8125rem] break-all select-all;
+    @apply min-w-0 flex-1 rounded-md border border-layer-line bg-muted px-3 py-2 text-sm break-all select-all;
     font-family: var(--font-mono);
   }
   .copy-box .btn {

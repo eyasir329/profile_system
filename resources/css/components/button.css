@@ -41,7 +41,7 @@
   }
 
   .btn-sm {
-    @apply h-8 gap-1.5 px-3 text-[0.8125rem];
+    @apply h-8 gap-1.5 px-3 text-sm;
   }
   .btn-lg {
     @apply h-11 px-5 text-[0.9375rem];

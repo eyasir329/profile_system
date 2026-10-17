@@ -4,28 +4,27 @@
  *
  * Route:  GET /dashboard.php
  * Auth:   require_login()
- * Renders:
- *   - greeting with avatar, role and profile type
- *   - profile completeness (same checklist as /profile.php) with the next
- *     steps as links that open the matching editor
- *   - entry count per profile section
- *   - account summary (email, username, 2FA, joined)
- *   - recent rows from `activity`, in plain language
- *   - "Users" shortcut when the active role is admin
+ * Renders a greeting, then one main panel for the role being acted as:
+ *   student  how much of their lab details is filled in, with the next
+ *            fields as links that open the matching editor
+ *   teacher  the students: how many, and who still has details to fill in
+ *   admin    account counts by role, deactivated accounts, open invitations
+ * and, for everyone, the account summary and recent activity.
  */
 declare(strict_types=1);
 require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
-require_once __DIR__ . '/../src/includes/profile_sections.php';
+require_once __DIR__ . '/../src/includes/lab_fields.php';
+require_once __DIR__ . '/../src/includes/lab_entries.php';
 require_once __DIR__ . '/../src/includes/ui.php';
 require_login();
 
 $userId = (int)current_user_id();
 $st = $pdo->prepare(
-    'SELECT u.id, u.name, u.username, u.email, u.email_verified, u.degree_type,
+    'SELECT u.id, u.name, u.email, u.email_verified,
             u.totp_required, u.created_at,
-            p.phone, p.address, p.profession, p.bio, p.photo
+            p.*
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id
      WHERE u.id = :id LIMIT 1'
 );
@@ -36,24 +35,78 @@ if (!$me) {
     header('Location: ' . url_login());
     exit;
 }
-$degreeType = normalize_degree_type($me['degree_type'] ?? 'bachelor');
-$firstName  = explode(' ', trim((string)$me['name']))[0] ?: (string)$me['username'];
+$firstName  = explode(' ', trim((string)$me['name']))[0] ?: 'there';
 $activeRole = active_user_role();
 
-// Entry count per visible section.
-$sectionCounts = [];
-foreach (visible_sections($degreeType) as $key) {
-    $c = $pdo->prepare("SELECT COUNT(*) FROM `$key` WHERE user_id = :u");
-    $c->execute(['u' => $userId]);
-    $sectionCounts[$key] = (int)$c->fetchColumn();
-}
+// ---- The main panel depends on the role being acted as. ----
+$isStudentView = $activeRole === 'student';
+$steps = $pending = $todo = $waiting = [];
+$stepsTotal = $stepsDone = $completePct = 0;
+$people = [];          // teacher: students; each with name, id, course, percent
+$stats  = [];          // admin: headline counts
 
-// Profile completeness: the checklist /profile.php uses.
-$steps       = profile_completion_steps($me, $sectionCounts, $degreeType);
-$stepsTotal  = count($steps);
-$pending     = array_values(array_filter($steps, fn($s) => !$s['done']));
-$stepsDone   = $stepsTotal - count($pending);
-$completePct = (int)round($stepsDone / $stepsTotal * 100);
+if ($isStudentView) {
+    // How much of the lab details is filled in (same checklist as /profile.php).
+    $steps       = profile_completion_steps($me);
+    $stepsTotal  = count($steps);
+    $pending     = array_values(array_filter($steps, fn($s) => !$s['done']));
+    // What the user can fill in themselves vs. what the system or an admin sets.
+    $todo        = array_values(array_filter($pending, fn($s) => $s['owner_edit']));
+    $waiting     = array_values(array_filter($pending, fn($s) => !$s['owner_edit']));
+    $stepsDone   = $stepsTotal - count($pending);
+    $completePct = (int)round($stepsDone / $stepsTotal * 100);
+
+    // Shortcuts to everything a student works with, each with a live number.
+    $myCourses  = enrollments_for($pdo, $userId);
+    $myEntries  = entries_for($pdo, $userId);
+    $pubCount   = 0;
+    foreach (['pub_journals', 'pub_proceedings', 'pub_presentations', 'awards'] as $k) { $pubCount += count($myEntries[$k]); }
+    $journalsAll   = (int)$pdo->query('SELECT COUNT(*) FROM lab_journals')->fetchColumn();
+    $journalsTaken = $pdo->prepare('SELECT COUNT(*) FROM lab_journal_takers WHERE user_id = :u');
+    $journalsTaken->execute(['u' => $userId]);
+    $journalsTaken = (int)$journalsTaken->fetchColumn();
+    $resourcesAll  = (int)$pdo->query('SELECT (SELECT COUNT(*) FROM lab_templates) + (SELECT COUNT(*) FROM lab_resources)')->fetchColumn();
+    $cur = $myCourses[0] ?? null;
+    $tiles = [
+        ['cap', 'My course', $cur
+            ? $cur['course'] . ($cur['completed'] !== '' ? ' · completed' : ' · current')
+            : 'Add your course',
+         url_profile() . '#sec-courses'],
+        ['book', 'Publications & awards', $pubCount === 0 ? 'Add your first' : $pubCount . ($pubCount === 1 ? ' entry' : ' entries'),
+         url_profile() . '#sec-publications'],
+        ['check', 'Potential journals', $journalsAll === 0 ? 'None suggested yet' : $journalsTaken . ' taken · ' . $journalsAll . ' suggested',
+         url_resources() . '?tab=journals'],
+        ['folder', 'Lab resources', $resourcesAll === 0 ? 'Nothing yet' : $resourcesAll . ($resourcesAll === 1 ? ' item' : ' items'),
+         url_resources()],
+    ];
+} elseif ($activeRole === 'teacher') {
+    // Every active student and how complete their lab details are.
+    $rows = $pdo->query(
+        "SELECT u.id, u.name, u.email, p.*
+           FROM users u LEFT JOIN profiles p ON p.user_id = u.id
+          WHERE u.deleted_at IS NULL
+            AND EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = 'student')
+          ORDER BY u.name"
+    )->fetchAll();
+    foreach ($rows as $r) {
+        $st = profile_completion_steps($r);
+        $people[] = [
+            'id' => (int)$r['id'], 'name' => (string)$r['name'], 'course' => trim((string)($r['course'] ?? '')),
+            'percent' => (int)round(count(array_filter($st, fn($x) => $x['done'])) / count($st) * 100),
+        ];
+    }
+} elseif ($activeRole === 'admin') {
+    $one = fn(string $sql): int => (int)$pdo->query($sql)->fetchColumn();
+    $stats = [
+        'students'    => $one("SELECT COUNT(DISTINCT u.id) FROM users u JOIN user_roles r ON r.user_id = u.id AND r.role = 'student' WHERE u.deleted_at IS NULL"),
+        'teachers'    => $one("SELECT COUNT(DISTINCT u.id) FROM users u JOIN user_roles r ON r.user_id = u.id AND r.role = 'teacher' WHERE u.deleted_at IS NULL"),
+        'admins'      => $one("SELECT COUNT(DISTINCT u.id) FROM users u JOIN user_roles r ON r.user_id = u.id AND r.role = 'admin' WHERE u.deleted_at IS NULL"),
+        'deactivated' => $one('SELECT COUNT(*) FROM users WHERE deleted_at IS NOT NULL'),
+        'invites'     => $one('SELECT COUNT(*) FROM invites WHERE revoked_at IS NULL AND used_count < max_uses AND expires_at > NOW()'),
+    ];
+}
+$incomplete = array_values(array_filter($people, fn($x) => $x['percent'] < 100));
+usort($incomplete, fn($a, $b) => $a['percent'] <=> $b['percent']);
 
 // Recent activity. Bookkeeping rows are skipped and runs of the same kind
 // are folded into one line, so the list is not twenty "profile_update"s.
@@ -84,100 +137,164 @@ require __DIR__ . '/../src/includes/header.php';
 
   <header class="page-header items-center">
     <div class="flex min-w-0 items-center gap-4">
-      <?= ui_avatar($me['photo'] ?? null, (string)$me['name'], 'avatar-lg') ?>
+      <?= ui_avatar(null, (string)$me['name'], 'avatar-lg') ?>
       <div class="min-w-0">
         <h1 class="page-title">Welcome back, <?= e($firstName) ?></h1>
         <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground-2">
-          <span>@<?= e($me['username']) ?></span>
-          <span class="badge"><?= e(degree_label($degreeType)) ?></span>
+          <?php if ($isStudentView && trim((string)($me['course'] ?? '')) !== ''): ?><span class="badge"><?= e($me['course']) ?></span><?php endif; ?>
           <?php if ($activeRole !== ''): ?><?= ui_role($activeRole) ?><?php endif; ?>
         </p>
       </div>
     </div>
-    <a class="btn btn-secondary" href="<?= e(url_profile()) ?>">Open my profile</a>
+    <?php if ($isStudentView): ?>
+      <a class="btn btn-secondary" href="<?= e(url_profile()) ?>">Open my profile</a>
+    <?php elseif ($activeRole === 'teacher'): ?>
+      <a class="btn btn-secondary" href="<?= e(url_students()) ?>"><?= pf_icon('users') ?> Open the Students sheet</a>
+    <?php elseif ($activeRole === 'admin'): ?>
+      <a class="btn btn-secondary" href="<?= e(url_admin()) ?>"><?= pf_icon('users') ?> Manage users</a>
+    <?php endif; ?>
   </header>
 
   <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]">
     <div>
 
+      <?php if ($isStudentView): ?>
+      <!-- ===== Student: my lab details ===== -->
       <section class="card" aria-labelledby="dash-complete-h">
         <div class="card-head">
-          <h2 class="card-title" id="dash-complete-h">Profile completeness</h2>
+          <h2 class="card-title" id="dash-complete-h">Lab details filled in</h2>
           <strong class="text-base font-semibold tabular-nums"><?= $completePct ?>%</strong>
         </div>
         <?= ui_progress($completePct, 'dash-complete-h') ?>
 
         <?php if (!$pending): ?>
           <p class="mt-4 flex items-center gap-2 text-sm text-success">
-            <?= pf_icon('check') ?> All <?= $stepsTotal ?> steps done. Your profile is complete.
+            <?= pf_icon('check') ?> All <?= $stepsTotal ?> fields are filled in.
           </p>
         <?php else: ?>
-          <p class="mt-4 text-sm text-muted-foreground-2"><?= $stepsDone ?> of <?= $stepsTotal ?> steps done. Pick up where you left off:</p>
-          <ul class="step-list">
-            <?php foreach (array_slice($pending, 0, 3) as $step): ?>
-              <li>
-                <a class="step" href="<?= e(url_profile()) ?>?step=<?= e(rawurlencode($step['key'])) ?>">
-                  <?= pf_icon('plus') ?>
-                  <span><?= e($step['label']) ?></span>
-                  <?= pf_icon('chevron', 'chev') ?>
-                </a>
-              </li>
-            <?php endforeach; ?>
-          </ul>
-          <?php if (count($pending) > 3): ?>
-            <p class="mt-2 px-2 text-[0.8125rem]"><a href="<?= e(url_profile()) ?>">and <?= count($pending) - 3 ?> more on your profile</a></p>
+          <p class="mt-4 text-sm text-muted-foreground-2"><?= $stepsDone ?> of <?= $stepsTotal ?> fields filled in.<?= $todo ? ' Pick up where you left off:' : '' ?></p>
+          <?php if ($todo): ?>
+            <ul class="step-list">
+              <?php foreach (array_slice($todo, 0, 3) as $step): ?>
+                <li>
+                  <a class="step" href="<?= e(url_profile()) ?>?step=<?= e(rawurlencode($step['key'])) ?>">
+                    <?= pf_icon('plus') ?>
+                    <span><?= e($step['label']) ?></span>
+                    <?= pf_icon('chevron', 'chev') ?>
+                  </a>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+            <?php if (count($todo) > 3): ?>
+              <p class="mt-2 px-2 text-sm"><a href="<?= e(url_profile()) ?>">and <?= count($todo) - 3 ?> more on your profile</a></p>
+            <?php endif; ?>
+          <?php endif; ?>
+          <?php if ($waiting): ?>
+            <p class="mt-3 flex items-start gap-2 text-sm text-muted-foreground-1">
+              <?= pf_icon('lock', 'mt-[0.15rem]') ?>
+              <span>Set by an admin, not yet filled in: <?= e(implode(', ', array_map(fn($s) => $s['field'], $waiting))) ?>.</span>
+            </p>
           <?php endif; ?>
         <?php endif; ?>
       </section>
 
-      <section class="card" aria-labelledby="dash-sections-h">
-        <div class="card-head">
-          <h2 class="card-title" id="dash-sections-h">What’s on your profile</h2>
-        </div>
-        <ul class="grid gap-x-8 sm:grid-cols-2">
-          <?php foreach ($sectionCounts as $key => $n): ?>
-            <li class="border-b border-layer-line">
-              <a class="flex items-center justify-between gap-4 py-2.5 text-sm text-foreground no-underline hover:text-primary"
-                 href="<?= e(url_profile()) ?><?= $n ? '#sec-' . e($key) : '?step=' . e(rawurlencode('section:' . $key)) ?>">
-                <span><?= e($SECTIONS[$key]['title']) ?></span>
-                <?php if ($n): ?>
-                  <span class="tabular-nums text-muted-foreground-2"><?= $n ?> <span class="sr-only"><?= $n === 1 ? 'entry' : 'entries' ?></span></span>
-                <?php else: ?>
-                  <span class="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-primary"><?= pf_icon('plus') ?> Add</span>
-                <?php endif; ?>
-              </a>
-            </li>
+      <section class="mt-5" aria-labelledby="dash-lab-h">
+        <h2 class="mb-3 text-lg font-bold" id="dash-lab-h">Your lab</h2>
+        <div class="tile-grid">
+          <?php foreach ($tiles as [$icon, $title, $value, $href]): ?>
+            <a class="tile" href="<?= e($href) ?>">
+              <span class="tile-icon"><?= pf_icon($icon) ?></span>
+              <span class="min-w-0 flex-1">
+                <span class="tile-title"><?= e($title) ?></span>
+                <span class="tile-value"><?= e($value) ?></span>
+              </span>
+              <?= pf_icon('chevron', 'chev') ?>
+            </a>
           <?php endforeach; ?>
-        </ul>
+        </div>
       </section>
 
-      <?php if ($activeRole === 'admin'): ?>
-        <section class="card" aria-labelledby="dash-admin-h">
-          <div class="action-row">
-            <div>
-              <strong id="dash-admin-h">Users</strong>
-              <p>Create accounts, change roles, edit or remove any user.</p>
-            </div>
-            <a class="btn btn-secondary" href="<?= e(url_admin()) ?>"><?= pf_icon('users') ?> Manage users</a>
-          </div>
-          <div class="action-row">
-            <div>
-              <strong>Invitations</strong>
-              <p>Create a link that lets someone register with the role you choose.</p>
-            </div>
-            <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invite by link</a>
-          </div>
-        </section>
       <?php elseif ($activeRole === 'teacher'): ?>
-        <section class="card" aria-labelledby="dash-teacher-h">
-          <div class="action-row">
-            <div>
-              <strong id="dash-teacher-h">Students</strong>
-              <p>Browse every student’s profile, or see all of them in one sheet.</p>
-            </div>
-            <a class="btn btn-secondary" href="<?= e(url_students()) ?>"><?= pf_icon('users') ?> Open directory</a>
+      <!-- ===== Teacher: the students ===== -->
+      <section class="card" aria-labelledby="dash-students-h">
+        <div class="card-head">
+          <h2 class="card-title" id="dash-students-h">Students</h2>
+          <a class="card-link" href="<?= e(url_students()) ?>">Open the sheet</a>
+        </div>
+        <?php if (!$people): ?>
+          <p class="text-sm text-muted-foreground-2">No students yet. Invite them and they will appear here once they register.</p>
+          <a class="btn btn-primary mt-4" href="<?= e(url_invites()) ?>"><?= pf_icon('plus') ?> Invite students</a>
+        <?php else: ?>
+          <p class="text-sm text-muted-foreground-2">
+            <strong class="font-semibold text-foreground"><?= count($people) ?></strong> <?= count($people) === 1 ? 'student' : 'students' ?>.
+            <?php if (!$incomplete): ?>
+              Everyone’s lab details are complete.
+            <?php else: ?>
+              <strong class="font-semibold text-foreground"><?= count($incomplete) ?></strong> still <?= count($incomplete) === 1 ? 'has' : 'have' ?> lab details to fill in:
+            <?php endif; ?>
+          </p>
+          <?php if ($incomplete): ?>
+            <ul class="mt-3">
+              <?php foreach (array_slice($incomplete, 0, 6) as $x): ?>
+                <li class="flex items-center gap-3 border-b border-layer-line py-2.5 text-sm">
+                  <a class="min-w-0 flex-1 truncate" href="<?= e(url_students()) ?>?id=<?= $x['id'] ?>"><?= e($x['name']) ?></a>
+                  <?php if ($x['course'] !== ''): ?><span class="badge"><?= e($x['course']) ?></span><?php endif; ?>
+                  <span class="meter"><span class="progress"><span class="progress-bar" style="width: <?= $x['percent'] ?>%"></span></span><span class="meter-text"><?= $x['percent'] ?>%</span></span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+            <?php if (count($incomplete) > 6): ?>
+              <p class="mt-3 text-sm text-muted-foreground-1">and <?= count($incomplete) - 6 ?> more in the sheet.</p>
+            <?php endif; ?>
+          <?php endif; ?>
+        <?php endif; ?>
+      </section>
+
+      <section class="card" aria-labelledby="dash-invite-h">
+        <div class="action-row">
+          <div>
+            <strong id="dash-invite-h">Invite students</strong>
+            <p>Create a link a student opens to register. The day you create it becomes their enrolment date.</p>
           </div>
-        </section>
+          <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invitations</a>
+        </div>
+      </section>
+
+      <?php elseif ($activeRole === 'admin'): ?>
+      <!-- ===== Admin: the accounts ===== -->
+      <section class="card" aria-labelledby="dash-users-h">
+        <div class="card-head">
+          <h2 class="card-title" id="dash-users-h">Accounts</h2>
+          <a class="card-link" href="<?= e(url_admin()) ?>">All users</a>
+        </div>
+        <dl class="facts">
+          <div><dt><?= ui_role('student') ?></dt><dd><a href="<?= e(url_admin()) ?>?role=student"><?= $stats['students'] ?></a></dd></div>
+          <div><dt><?= ui_role('teacher') ?></dt><dd><a href="<?= e(url_admin()) ?>?role=teacher"><?= $stats['teachers'] ?></a></dd></div>
+          <div><dt><?= ui_role('admin') ?></dt><dd><a href="<?= e(url_admin()) ?>?role=admin"><?= $stats['admins'] ?></a></dd></div>
+          <div><dt>Deactivated</dt><dd><?= $stats['deactivated'] ? '<a href="' . e(url_admin()) . '?status=deactivated">' . $stats['deactivated'] . '</a>' : '0' ?></dd></div>
+          <div><dt>Open invitations</dt><dd><a href="<?= e(url_invites()) ?>"><?= $stats['invites'] ?></a></dd></div>
+        </dl>
+      </section>
+
+      <section class="card" aria-labelledby="dash-admin-h">
+        <div class="action-row">
+          <div>
+            <strong id="dash-admin-h">Add someone</strong>
+            <p>Send an invitation link, or create the account yourself and set a password.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invite by link</a>
+            <a class="btn btn-secondary" href="<?= e(url_admin_user()) ?>"><?= pf_icon('plus') ?> New user</a>
+          </div>
+        </div>
+        <div class="action-row">
+          <div>
+            <strong>Students sheet</strong>
+            <p>Every student’s lab details in the workbook’s layout.</p>
+          </div>
+          <a class="btn btn-secondary" href="<?= e(url_admin()) ?>?view=sheet"><?= pf_icon('expand') ?> Open sheet</a>
+        </div>
+      </section>
       <?php endif; ?>
 
     </div>
@@ -208,7 +325,7 @@ require __DIR__ . '/../src/includes/header.php';
                 <span class="badge badge-success">On</span>
               <?php else: ?>
                 <span class="badge">Off</span>
-                <a class="text-[0.8125rem]" href="<?= e(url_settings()) ?>?tab=security#two-factor">Turn on</a>
+                <a class="text-sm" href="<?= e(url_settings()) ?>?tab=security#two-factor">Turn on</a>
               <?php endif; ?>
             </dd>
           </div>
@@ -233,7 +350,7 @@ require __DIR__ . '/../src/includes/header.php';
               <li class="flex items-start gap-3 text-sm">
                 <?= pf_icon($icon, 'mt-[0.2rem] text-muted-foreground-1') ?>
                 <span class="min-w-0 flex-1"><?= e($text) ?></span>
-                <time class="shrink-0 text-[0.8125rem] text-muted-foreground-1" datetime="<?= e(date('c', strtotime((string)$a['created_at']))) ?>" title="<?= e($a['created_at']) ?>"><?= e(ui_ago((int)$a['age'], (string)$a['created_at'])) ?></time>
+                <time class="shrink-0 text-sm text-muted-foreground-1" datetime="<?= e(date('c', strtotime((string)$a['created_at']))) ?>" title="<?= e($a['created_at']) ?>"><?= e(ui_ago((int)$a['age'], (string)$a['created_at'])) ?></time>
               </li>
             <?php endforeach; ?>
           </ul>

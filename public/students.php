@@ -2,8 +2,8 @@
 /**
  * Teacher's student directory (read-only).
  *
- * Route:  GET /students.php               compact list
- *         GET /students.php?view=sheet    every field in one wide table
+ * Route:  GET /students.php               every field of every student in one wide table
+ *                                         (sheet only: there is no list view here)
  *         GET /students.php?id=<id>       one student's full profile
  * Auth:   require_login(); the ACTIVE role must be teacher (or admin).
  *
