@@ -144,6 +144,19 @@ ever has to HTML-escape, never JS-escape.
 One-line state is written inline, for example the password toggle
 (`x-data="{ show: false }"`) and the mobile drawer.
 
+### Sheets
+
+- `sheet` (on the page around a wide `.sheet` table) handles full screen
+  and frozen panes: it measures the header cells marked `.freeze` and
+  sets `--fz1` … `--fz4` on the table, again on resize, when fonts load
+  and when full screen changes.
+- `sheetFilter` (around a sheet's toolbar and table, on `/resources.php`)
+  filters rows as you type (every word must appear in the row), shows
+  only `tr.is-mine` rows when "Only mine" is ticked, counts what is
+  showing, and sorts by a column when its header button is clicked
+  (numbers numerically, blanks last). Header buttons call `sort(i)`, show
+  `arrow(i)` and bind `aria-sort` to `ariaSort(i)`.
+
 ### The profile editor
 
 `profile-editor.js` is plain DOM code, not Alpine. Clicking Edit on a lab

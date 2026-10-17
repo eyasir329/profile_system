@@ -177,7 +177,12 @@ and courses are plain `.badge`.
   one `aria-current="page"`, with an optional `.tab-count`. Add
   `.is-wrap` when there are many (they wrap as pills, none hidden) and
   `.is-compact` inside the full-screen bar. Used by the Students sheet and
-  `/resources.php`.
+  `/resources.php`. Wrap several groups in `.tab-groups` > `.tab-group`
+  with a `.tab-group-label` each (Resources: "Shared by teachers" and
+  "Lab publications").
+- **Filter chips** (`.filter-chips`, `.filter-chips-label`): small pill
+  links with counts that narrow a list, current one `aria-current="page"`.
+  The Students sheet filters by course with them.
 
 ## Data
 
@@ -222,9 +227,26 @@ Cell helpers: `.nowrap`, `.pre` (keeps line breaks), `.num`,
 per pair. `.is-single` forces one column; `.is-stacked` puts long values
 under their label.
 
+**Sheet extras**:
+- `.pin` keeps the first column at the left and `.pin-end` keeps the last
+  (row actions) at the right while the sheet scrolls sideways.
+- `.freeze .freeze-1` … `.freeze-4` freeze several leading columns, like
+  frozen panes in Excel, from 80rem (1280 px) up. The `sheet` component
+  measures each column and sets the offsets (`--fz1` … `--fz4`), so the
+  columns may be any width. The teachers' Students sheet freezes Course,
+  Student ID and both names.
+- `tr.group-start` draws a thicker line where a new group (course) begins.
+- `.sheet-tools` is a sheet's own toolbar: a filter box, an optional
+  "Only mine" check and a `.sheet-tools-count`. Header buttons
+  `.sort-btn` sort the column. Both are driven by `x-data="sheetFilter"`
+  (see FRONTEND.md); they work in the browser, with no reload.
+- `.sheet` tables use separate (not collapsed) borders so that pinned and
+  frozen cells keep their borders while the rest scrolls underneath.
+
 **Alternating rows**: every `.sheet` table stripes even rows in a tint of
 the primary colour (`--stripe`, opaque so the pinned first column stays
-readable). A row with `class="is-mine"` is tinted more, in two shades.
+readable). Rows hidden by a filter are skipped, so the stripes stay even
+(`:nth-child(even of :not([hidden]))`). A row with `class="is-mine"` is tinted more, in two shades.
 Hover wins over both.
 
 **Several items in one cell** (`.multi`): `ui_multi($items)` returns plain
@@ -287,7 +309,7 @@ All in `src/includes/ui.php`. Each returns an HTML string.
 
 | Helper | Returns |
 | --- | --- |
-| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot expand collapse cap book folder` |
+| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot expand collapse cap book folder download` |
 | `ui_avatar($photo, $name, $size = '')` | Initial avatar (pass `null` for the photo) |
 | `ui_role($role)`, `ui_roles($roles)` | Role with its dot; a list, or a "No role" badge |
 | `ui_alert($type, $html)` | Inline alert |

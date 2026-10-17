@@ -257,7 +257,7 @@ if (isset($_GET['id'])) {
 $q      = trim((string)($_GET['q'] ?? ''));
 $roleFilter   = $isAdmin ? (string)($_GET['role'] ?? '') : '';
 $status = $isAdmin ? (string)($_GET['status'] ?? '') : '';
-$course = $isAdmin ? (string)($_GET['course'] ?? '') : '';
+$course = (string)($_GET['course'] ?? '');
 $sort   = (string)($_GET['sort'] ?? '');
 $dir    = strtolower((string)($_GET['dir'] ?? '')) === 'desc' ? 'desc' : 'asc';
 if ($sort === 'created') { $sort = 'joined'; }
@@ -328,11 +328,15 @@ if ($status === 'active') {
 } else {
     $status = '';
 }
-if (in_array($course, $COURSES, true)) {
+// Course filter. The list view filters in SQL; the sheet filters the rows
+// after they are built (below), so it also applies to the Completed tab's
+// frozen rows and can offer "none" (no course yet).
+if (!in_array($course, $COURSES, true) && !($course === 'none' && $view === 'sheet')) {
+    $course = '';
+}
+if ($view === 'list' && $course !== '') {
     $where[] = 'p.course = :course';
     $params['course'] = $course;
-} else {
-    $course = '';
 }
 
 $st = $pdo->prepare(
@@ -353,6 +357,18 @@ if ($group === 'completed') {
 }
 
 $total = (int)$pdo->query("SELECT COUNT(*) FROM users u WHERE $scopeWhere")->fetchColumn();
+
+// Sheet: rows per course (for the filter chips, before the course filter),
+// then keep only the chosen course. Key 'none' = no course yet.
+$courseOf = fn(array $s): string => trim((string)($s['course'] ?? '')) !== '' ? trim((string)$s['course']) : 'none';
+$courseCounts = [];
+if ($view === 'sheet') {
+    foreach ($students as $s) { $courseCounts[$courseOf($s)] = ($courseCounts[$courseOf($s)] ?? 0) + 1; }
+    uksort($courseCounts, fn($a, $b) => ($COURSE_ORDER[$a] ?? 99) <=> ($COURSE_ORDER[$b] ?? 99));
+    if ($course !== '') {
+        $students = array_values(array_filter($students, fn($s) => $courseOf($s) === $course));
+    }
+}
 
 // Completeness is the share of lab fields filled in, as on each person's own profile.
 // Only students have lab details; for anyone else percent is null.
@@ -398,6 +414,36 @@ $ariaSort = fn(string $key): string => $sort === $key ? ' aria-sort="' . ($dir =
 $clearUrl = $baseUrl . ($view === 'sheet' && !$sheetOnly ? '?view=sheet' : '');
 $noun     = fn(int $n): string => $n . ' ' . ($n === 1 ? $DIR['one'] : $DIR['many']);
 
+// Download the sheet as it is shown (tab, search and course filter), with
+// the workbook's column headers. UTF-8 with a BOM so Excel reads Japanese.
+if ($view === 'sheet' && ($_GET['export'] ?? '') === 'csv') {
+    $file = 'students-' . $group . ($course !== '' ? '-' . $course : '') . '-' . date('Y-m-d') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $file . '"');
+    // A cell starting with = + - @ would run as a formula in Excel: make it text.
+    $safe = fn(string $v): string => preg_match('/^[=+\-@\t\r]/', $v) ? "'" . $v : $v;
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    $head = array_map(fn($c) => $c[0], $XLSX_COLUMNS);
+    if ($group === 'completed') { $head[] = 'Completed'; }
+    fputcsv($out, $head, ',', '"', '', "\r\n");
+    foreach ($students as $s) {
+        $row = [];
+        foreach ($XLSX_COLUMNS as $key => $_) { $row[] = $safe(trim((string)($s[$key] ?? ''))); }
+        if ($group === 'completed') { $row[] = str_replace('-', '/', substr((string)$s['course_completed_at'], 0, 7)); }
+        fputcsv($out, $row, ',', '"', '', "\r\n");
+    }
+    exit;
+}
+$exportUrl  = '?' . http_build_query(array_merge(array_diff_key($_GET, ['done' => 1]), ['export' => 'csv']));
+$courseLink = function (string $c): string {
+    $qs = array_diff_key($_GET, ['done' => 1, 'course' => 1, 'export' => 1]);
+    return '?' . http_build_query(array_merge($qs, $c !== '' ? ['course' => $c] : []));
+};
+// Teachers' sheet: the first four workbook columns (course, ID, both names)
+// stay at the left while scrolling sideways, like frozen panes in Excel.
+$FREEZE = $isAdmin ? [] : ['course' => 'freeze freeze-1', 'student_id' => 'freeze freeze-2', 'name_jp' => 'freeze freeze-3', 'name_en' => 'freeze freeze-4'];
+
 $page_title = $DIR['title'];
 require __DIR__ . '/header.php';
 ?>
@@ -409,9 +455,11 @@ require __DIR__ . '/header.php';
         <?php if ($filtered): ?>
           <?= e($noun(count($students))) ?> of <?= $total ?> match your filters.
         <?php else: ?>
-          <?= e($noun($total)) ?>.
-          <?= $isAdmin ? '' : 'Read-only.' ?>
-          <?= $view === 'sheet' ? 'Scroll sideways to see every field, or open a ' . e($DIR['one']) . ' for their full profile.' : 'Open a ' . e($DIR['one']) . ' to see their full profile.' ?>
+          <?php if ($view === 'sheet'): ?>
+            Everyone’s lab details, laid out like the lab’s workbook. Click a name for the full profile<?= $isAdmin ? '' : ', or download the sheet for Excel' ?>.
+          <?php else: ?>
+            <?= e($noun($total)) ?>. Open a <?= e($DIR['one']) ?> to see their full profile.
+          <?php endif; ?>
         <?php endif; ?>
       </p>
     </div>
@@ -443,7 +491,7 @@ require __DIR__ . '/header.php';
         </select>
       </div>
     <?php endif; ?>
-    <?php if ($isAdmin): ?>
+    <?php if ($isAdmin && $view === 'list'): ?>
       <div>
         <label class="sr-only" for="stu-course">Course</label>
         <select class="select" id="stu-course" name="course">
@@ -453,6 +501,8 @@ require __DIR__ . '/header.php';
           <?php endforeach; ?>
         </select>
       </div>
+    <?php endif; ?>
+    <?php if ($isAdmin): ?>
       <div>
         <label class="sr-only" for="stu-status">Status</label>
         <select class="select" id="stu-status" name="status">
@@ -464,6 +514,7 @@ require __DIR__ . '/header.php';
     <?php endif; ?>
     <?php if ($view === 'sheet' && !$sheetOnly): ?><input type="hidden" name="view" value="sheet"><?php endif; ?>
     <?php if ($group === 'completed'): ?><input type="hidden" name="group" value="completed"><?php endif; ?>
+    <?php if ($view === 'sheet' && $course !== ''): ?><input type="hidden" name="course" value="<?= e($course) ?>"><?php endif; ?>
     <?php if ($sort !== ($view === 'sheet' ? 'course' : 'name') || $dir !== 'asc'): ?>
       <input type="hidden" name="sort" value="<?= e($sort) ?>">
       <input type="hidden" name="dir" value="<?= e($dir) ?>">
@@ -473,6 +524,7 @@ require __DIR__ . '/header.php';
 
     <div class="ml-auto flex items-center gap-2">
       <?php if ($view === 'sheet' && $students): ?>
+        <a class="btn btn-ghost btn-sm" href="<?= e($exportUrl) ?>" download><?= pf_icon('download') ?> Download CSV</a>
         <button type="button" class="btn btn-ghost btn-sm" x-ref="enter" @click="set(true)"><?= pf_icon('expand') ?> Full screen</button>
       <?php endif; ?>
       <?php if (!$sheetOnly): ?>
@@ -484,7 +536,18 @@ require __DIR__ . '/header.php';
     </div>
   </form>
 
-  <?php if ($view === 'sheet'): ?><?= $groupTabs() ?><?php endif; ?>
+  <?php if ($view === 'sheet'): ?>
+    <?= $groupTabs() ?>
+    <?php if (count($courseCounts) > 1 || $course !== ''): ?>
+      <nav class="filter-chips" aria-label="Filter by course">
+        <span class="filter-chips-label">Course</span>
+        <a href="<?= e($courseLink('')) ?>"<?= $course === '' ? ' aria-current="page"' : '' ?>>All <span class="tab-count"><?= array_sum($courseCounts) ?></span></a>
+        <?php foreach ($courseCounts as $c => $n): ?>
+          <a href="<?= e($courseLink($c)) ?>"<?= $course === $c ? ' aria-current="page"' : '' ?>><?= e($c === 'none' ? 'No course' : $c) ?> <span class="tab-count"><?= $n ?></span></a>
+        <?php endforeach; ?>
+      </nav>
+    <?php endif; ?>
+  <?php endif; ?>
 
   <?php if (!$students && $group === 'completed'): ?>
     <div class="empty">
@@ -520,7 +583,7 @@ require __DIR__ . '/header.php';
                 <th scope="col">Status</th>
               <?php endif; ?>
               <?php foreach ($XLSX_COLUMNS as $key => [$heading, $class]): ?>
-                <th scope="col" class="whitespace-pre-line!"><?= e($heading) ?></th>
+                <th scope="col" class="whitespace-pre-line! <?= $FREEZE[$key] ?? '' ?>"><?= e($heading) ?></th>
               <?php endforeach; ?>
               <?php if ($group === 'completed'): ?><th scope="col">Completed</th><?php endif; ?>
               <?php if ($isAdmin): ?>
@@ -530,8 +593,11 @@ require __DIR__ . '/header.php';
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($students as $s): ?>
-              <tr>
+            <?php $prevCourse = null; foreach ($students as $s):
+                // A line between course groups (the sheet is ordered by course).
+                $startsGroup = $sort === 'course' && $prevCourse !== null && $courseOf($s) !== $prevCourse;
+                $prevCourse = $courseOf($s); ?>
+              <tr<?= $startsGroup ? ' class="group-start"' : '' ?>>
                 <?php if ($isAdmin): ?>
                   <th scope="row" class="pin nowrap">
                     <a class="person" href="<?= e($baseUrl . '?id=' . (int)$s['id']) ?>">
@@ -545,6 +611,7 @@ require __DIR__ . '/header.php';
                 <?php endif; ?>
                 <?php foreach ($XLSX_COLUMNS as $key => [$heading, $class]):
                     $value = trim((string)($s[$key] ?? ''));
+                    $class .= isset($FREEZE[$key]) ? ' ' . $FREEZE[$key] : '';
                 ?>
                   <?php if (!$isAdmin && $key === 'name_en'): ?>
                     <th scope="row" class="<?= $class ?>">

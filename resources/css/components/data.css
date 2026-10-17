@@ -133,6 +133,13 @@
   .sheet-frame.is-full .sheet-scroll {
     @apply max-h-none flex-1;
   }
+  /* Separate (not collapsed) borders: each cell then owns its border strip,
+     so pinned and frozen cells keep it while the rest scrolls underneath.
+     Cells draw only right and bottom borders, so nothing doubles. */
+  .table.sheet {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
   .sheet th,
   .sheet td {
     @apply border-r border-table-line py-2.5 align-top text-sm;
@@ -171,13 +178,14 @@
     --mine: color-mix(in oklch, var(--primary) 15%, var(--card));
     --mine-alt: color-mix(in oklch, var(--primary) 24%, var(--card));
   }
-  .sheet tbody tr:nth-child(even) > * {
+  /* "of :not([hidden])": rows hidden by a filter do not break the stripes. */
+  .sheet tbody tr:nth-child(even of :not([hidden])) > * {
     background: var(--stripe);
   }
   .sheet tbody tr.is-mine > * {
     background: var(--mine);
   }
-  .sheet tbody tr.is-mine:nth-child(even) > * {
+  .sheet tbody tr.is-mine:nth-child(even of :not([hidden])) > * {
     background: var(--mine-alt);
   }
   .sheet tbody tr:hover > * {
@@ -225,6 +233,80 @@
   .sheet-tabs.is-compact a {
     @apply -my-2.5 py-2.5;
   }
+  /* Tabs in labelled groups (Resources: shared by teachers / lab publications). */
+  .tab-groups {
+    @apply mb-6 flex flex-wrap gap-x-10 gap-y-4;
+  }
+  .tab-group-label {
+    @apply mb-2 text-xs font-bold tracking-wider text-muted-foreground-1 uppercase;
+  }
+  .tab-groups .sheet-tabs {
+    @apply mb-0;
+  }
+
+  /* A sheet's own toolbar (filter box, "Only mine", row count). */
+  .sheet-tools {
+    @apply mb-3 flex flex-wrap items-center gap-x-4 gap-y-2;
+  }
+  .sheet-tools .search-field {
+    @apply w-full sm:w-72;
+  }
+  .sheet-tools-count {
+    @apply ml-auto text-sm text-muted-foreground-2 tabular-nums;
+  }
+  .sheet th .sort-btn {
+    @apply inline-flex cursor-pointer items-center gap-1 text-left font-bold whitespace-pre-line text-inherit hover:text-primary;
+  }
+
+  /* Filter chips: a row of small pill links with counts (Students: by course). */
+  .filter-chips {
+    @apply mb-3 flex flex-wrap items-center gap-1.5;
+  }
+  .filter-chips-label {
+    @apply mr-1 text-sm font-semibold text-muted-foreground-2;
+  }
+  .filter-chips a {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-layer-line bg-card px-3 py-1 text-sm font-medium text-muted-foreground-2 no-underline hover:border-primary hover:text-foreground;
+  }
+  .filter-chips a[aria-current="page"] {
+    @apply border-primary bg-primary text-primary-foreground;
+  }
+  .filter-chips a[aria-current="page"] .tab-count {
+    @apply bg-white/20 text-primary-foreground;
+  }
+
+  /* A thicker line where the next course group starts (Students sheet). */
+  .sheet tbody tr.group-start > * {
+    border-top: 2px solid color-mix(in oklch, var(--primary) 40%, var(--card));
+  }
+
+  /* Frozen panes (teachers' Students sheet): the first four columns stay at
+     the left while scrolling sideways, from wide screens up. Fixed widths
+     so each column knows where the previous one ends. Opaque backgrounds
+     (stripes and hover set their own, later in this file). */
+  @media (width >= 80rem) {
+    .sheet .freeze {
+      position: sticky;
+      z-index: 4;
+      min-width: var(--fw);
+      white-space: normal;
+      background: var(--card);
+    }
+    .sheet thead .freeze {
+      z-index: 20;
+      @apply bg-muted;
+    }
+    /* --fz1..4: left offsets measured by the sheet component (ui.js). */
+    .sheet .freeze-1 { left: var(--fz1, 0); --fw: 5.5rem; }
+    .sheet .freeze-2 { left: var(--fz2, 5.5rem); --fw: 7rem; }
+    .sheet .freeze-3 { left: var(--fz3, 12.5rem); --fw: 9rem; }
+    .sheet .freeze-4 {
+      left: var(--fz4, 21.5rem);
+      --fw: 10.5rem;
+      box-shadow: 1px 0 0 var(--table-line), 8px 0 10px -8px rgb(0 0 0 / 0.18);
+    }
+  }
+
   /* Several items in one cell or field (ui_multi): numbered, with a divider between. */
   .multi {
     counter-reset: item;

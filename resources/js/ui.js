@@ -15,7 +15,9 @@
  *   dirtyForm        "You have unsaved changes" + leave-page warning
  *   themePicker      Settings > Appearance
  *   passwordForm     Settings > Security: live length / match feedback
- *   sheet            the full-screen mode of the directory's wide table
+ *   sheet            the full-screen mode of a wide sheet, and its frozen
+ *                    columns (.freeze-1..4: left offsets measured, not guessed)
+ *   sheetFilter      a sheet's instant filter, "Only mine" and sortable headers
  */
 
 let AlpineRef = null;
@@ -277,6 +279,24 @@ export function registerUi(Alpine) {
         /* storage blocked: start windowed */
       }
       this.sync();
+      // Frozen panes: each frozen column starts where the previous one ends.
+      // Measured from the real header cells (table cells grow to fit their
+      // content, so fixed offsets would drift).
+      const measure = () => this.freeze();
+      this.$nextTick(measure);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+      window.addEventListener('resize', measure);
+    },
+    freeze() {
+      this.$root.querySelectorAll('table.sheet').forEach((table) => {
+        let left = 0;
+        table.querySelectorAll('thead .freeze').forEach((th, i) => {
+          // Rounded down: columns overlap by under a pixel instead of
+          // leaving a sub-pixel gap that scrolled text shows through.
+          table.style.setProperty('--fz' + (i + 1), Math.floor(left) + 'px');
+          left += th.getBoundingClientRect().width;
+        });
+      });
     },
     set(on) {
       this.full = on;
@@ -286,10 +306,76 @@ export function registerUi(Alpine) {
         /* ignore */
       }
       this.sync();
-      this.$nextTick(() => (on ? this.$refs.scroll : this.$refs.enter)?.focus({ preventScroll: true }));
+      this.$nextTick(() => {
+        this.freeze();
+        (on ? this.$refs.scroll : this.$refs.enter)?.focus({ preventScroll: true });
+      });
     },
     sync() {
       document.documentElement.classList.toggle('has-sheet-full', this.full);
+    },
+  }));
+
+  // A sheet's tools, in the browser only (no reload): filter rows by any
+  // text, show only the viewer's rows (tr.is-mine), and sort by a column.
+  // Markup: x-data="sheetFilter" around the toolbar and the table; header
+  // buttons call sort(<column index>) and show arrow(<index>).
+  Alpine.data('sheetFilter', () => ({
+    q: '',
+    mine: false,
+    shown: 0,
+    total: 0,
+    sortCol: -1,
+    sortDir: 1,
+    init() {
+      this.body = this.$root.querySelector('table.sheet tbody');
+      this.rows = this.body ? Array.from(this.body.rows) : [];
+      this.total = this.rows.length;
+      // What a row says, without screen-reader-only "Not set" or button labels.
+      this.texts = this.rows.map((r) => {
+        const c = r.cloneNode(true);
+        c.querySelectorAll('.sr-only, form, button, a.btn').forEach((x) => x.remove());
+        return c.textContent.toLowerCase().replace(/\s+/g, ' ');
+      });
+      this.apply();
+      this.$watch('q', () => this.apply());
+      this.$watch('mine', () => this.apply());
+    },
+    apply() {
+      const words = this.q.toLowerCase().split(/\s+/).filter(Boolean);
+      let n = 0;
+      this.rows.forEach((r, i) => {
+        const ok = words.every((w) => this.texts[i].includes(w)) && (!this.mine || r.classList.contains('is-mine'));
+        r.hidden = !ok;
+        if (ok) n++;
+      });
+      this.shown = n;
+    },
+    cellValue(r, col) {
+      const c = r.cells[col];
+      if (!c) return '';
+      const x = c.cloneNode(true);
+      x.querySelectorAll('.sr-only, form, button').forEach((el) => el.remove());
+      return x.textContent.trim().replace(/\s+/g, ' ');
+    },
+    sort(col) {
+      this.sortDir = this.sortCol === col ? -this.sortDir : 1;
+      this.sortCol = col;
+      const isNum = (v) => /^-?\d+(\.\d+)?$/.test(v);
+      const sorted = this.rows.slice().sort((ra, rb) => {
+        const a = this.cellValue(ra, col);
+        const b = this.cellValue(rb, col);
+        if (a === '' || b === '') return a === b ? 0 : a === '' ? 1 : -1; // blanks always last
+        const d = isNum(a) && isNum(b) ? parseFloat(a) - parseFloat(b) : a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+        return d * this.sortDir;
+      });
+      sorted.forEach((r) => this.body.appendChild(r));
+    },
+    arrow(col) {
+      return this.sortCol === col ? (this.sortDir > 0 ? '↑' : '↓') : '↕';
+    },
+    ariaSort(col) {
+      return this.sortCol === col ? (this.sortDir > 0 ? 'ascending' : 'descending') : 'none';
     },
   }));
 

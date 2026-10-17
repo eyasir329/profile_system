@@ -249,8 +249,8 @@ $page_title = 'Lab resources';
 $page_id    = 'resources';
 require __DIR__ . '/../src/includes/header.php';
 ?>
-<?php // The sheet tabs (journals and the four publications sheets) are wide: use the wide page, as the Students sheet does. ?>
-<div class="<?= $tab === 'journals' || isset($SHEETS[$tab]) ? 'page-wide' : 'page' ?>" x-data="sheet">
+<?php // One width for every tab, so the header and tabs never jump when switching; card tabs keep a readable column inside. ?>
+<div class="page-wide" x-data="sheet">
   <header class="page-header">
     <div>
       <h1 class="page-title">Lab resources</h1>
@@ -275,14 +275,39 @@ require __DIR__ . '/../src/includes/header.php';
 
   <?php
   // The tab row: above the content, and again in the full-screen bar.
-  $tabNav = function (string $class = '') use ($TABS, $tab, $tabCount): string {
-      $html = '<nav class="sheet-tabs' . ($class === '' ? ' is-wrap' : $class) . '" aria-label="Resources">';
-      foreach ($TABS as $t => $label) {
-          $html .= '<a href="' . e(url_resources() . '?tab=' . $t) . '"' . ($tab === $t ? ' aria-current="page"' : '') . '>'
-              . e($label) . ' <span class="tab-count">' . $tabCount($t) . '</span></a>';
+  // The tabs come in two kinds, shown as two labelled groups: what teachers
+  // share with the lab, and the students' publication sheets. The
+  // full-screen bar gets them as one compact row.
+  $tabNav = function (string $class = '') use ($TABS, $tab, $tabCount, $SHEETS): string {
+      $link = fn(string $t): string => '<a href="' . e(url_resources() . '?tab=' . $t) . '"' . ($tab === $t ? ' aria-current="page"' : '') . '>'
+          . e($TABS[$t]) . ' <span class="tab-count">' . $tabCount($t) . '</span></a>';
+      if ($class !== '') {
+          return '<nav class="sheet-tabs' . $class . '" aria-label="Resources">' . implode('', array_map($link, array_keys($TABS))) . '</nav>';
       }
-      return $html . '</nav>';
+      $groups = ['Shared by teachers' => ['templates', 'data', 'journals'], 'Lab publications' => array_keys($SHEETS)];
+      $html = '<div class="tab-groups">';
+      foreach ($groups as $label => $keys) {
+          $html .= '<div class="tab-group"><p class="tab-group-label">' . e($label) . '</p>'
+              . '<nav class="sheet-tabs is-wrap" aria-label="' . e($label) . '">' . implode('', array_map($link, $keys)) . '</nav></div>';
+      }
+      return $html . '</div>';
   };
+  // A sheet's toolbar: instant filter, "Only mine" (students with rows of
+  // their own), and how many rows are showing. Used inside x-data="sheetFilter".
+  $sheetTools = function (bool $withMine, string $placeholder): string {
+      return '<div class="sheet-tools">'
+          . '<div class="search-field"><label class="sr-only" for="sheet-q">Filter rows</label>' . pf_icon('search')
+          . '<input class="input" id="sheet-q" type="search" x-model.debounce.150ms="q" placeholder="' . e($placeholder) . '" autocomplete="off"></div>'
+          . ($withMine ? '<label class="check"><input type="checkbox" x-model="mine"> Only mine</label>' : '')
+          . '<span class="sheet-tools-count" aria-live="polite" x-text="shown === total ? total + (total === 1 ? \' row\' : \' rows\') : \'Showing \' + shown + \' of \' + total"></span>'
+          . '</div>';
+  };
+  // A header cell that sorts the sheet by its column (in the browser).
+  $sortTh = fn(int $i, string $label, string $class = ''): string =>
+      '<th scope="col" class="' . $class . '" :aria-sort="ariaSort(' . $i . ')"><button type="button" class="sort-btn" @click="sort(' . $i . ')">'
+      . e($label) . ' <span aria-hidden="true" class="font-normal" :class="sortCol === ' . $i . ' ? \'text-primary\' : \'opacity-35\'" x-text="arrow(' . $i . ')">↕</span></button></th>';
+  // Shown when the filter leaves no rows.
+  $noMatch = '<p class="py-8 text-center text-sm text-muted-foreground-2" x-show="shown === 0" x-cloak>No rows match. <button type="button" class="font-semibold text-primary" @click="q = \'\'; mine = false">Clear the filter</button></p>';
   ?>
   <?= $tabNav() ?>
 
@@ -298,21 +323,24 @@ require __DIR__ . '/../src/includes/header.php';
         <p>Students add these on My profile, under “Publications &amp; awards”.</p>
         <?php if (active_user_role() === 'student'): ?><a class="btn btn-secondary" href="<?= e(url_profile()) ?>#sec-publications">Add yours</a><?php endif; ?>
       </div>
-    <?php else: ?>
+    <?php else:
+        $hasMine = active_user_role() === 'student' && in_array($userId, array_map(fn($r) => (int)$r['user_id'], $rows), true); ?>
+      <div x-data="sheetFilter">
+      <?= $sheetTools($hasMine, 'Filter by student, title, year…') ?>
       <div class="table-wrap sheet-frame" :class="full && 'is-full'" @keydown.escape.window="full && set(false)">
         <!-- Shown only in full-screen mode. -->
         <div class="sheet-bar">
           <?= $tabNav(' is-compact') ?>
-          <span class="faint"><?= count($rows) ?> <?= count($rows) === 1 ? 'row' : 'rows' ?></span>
+          <span class="faint" x-text="shown + ' of ' + total"><?= count($rows) ?></span>
           <button type="button" class="btn btn-secondary btn-sm" @click="set(false)"><?= pf_icon('collapse') ?> Exit full screen <kbd class="kbd">Esc</kbd></button>
         </div>
         <div class="sheet-scroll" tabindex="0" role="region" aria-label="<?= e($sDef['sheet']) ?>" x-ref="scroll">
           <table class="table sheet">
             <thead>
               <tr>
-                <th scope="col" class="pin">Student</th>
-                <?php foreach ($sDef['fields'] as $f): ?>
-                  <th scope="col" class="whitespace-pre-line!"><?= e($f['heading'] ?? $f['label']) ?></th>
+                <?= $sortTh(0, 'Student', 'pin') ?>
+                <?php $i = 1; foreach ($sDef['fields'] as $f): ?>
+                  <?= $sortTh($i++, $f['heading'] ?? $f['label'], 'whitespace-pre-line!') ?>
                 <?php endforeach; ?>
               </tr>
             </thead>
@@ -341,6 +369,8 @@ require __DIR__ . '/../src/includes/header.php';
             </tbody>
           </table>
         </div>
+        <?= $noMatch ?>
+      </div>
       </div>
     <?php endif; ?>
 
@@ -394,26 +424,29 @@ require __DIR__ . '/../src/includes/header.php';
         <h2 class="empty-title">No journals yet</h2>
         <p><?= $canEdit ? 'Add the first one below.' : 'Your teachers have not suggested any journals.' ?></p>
       </div>
-    <?php else: ?>
+    <?php else:
+        $hasMine = $isStudent && array_filter($takers, fn($t) => isset($t[$userId])); ?>
+      <div x-data="sheetFilter">
+      <?= $sheetTools((bool)$hasMine, 'Filter by journal, publisher, person…') ?>
       <div class="table-wrap sheet-frame" :class="full && 'is-full'" @keydown.escape.window="full && set(false)">
         <!-- Shown only in full-screen mode. -->
         <div class="sheet-bar">
           <?= $tabNav(' is-compact') ?>
-          <span class="faint"><?= count($journals) ?> <?= count($journals) === 1 ? 'journal' : 'journals' ?></span>
+          <span class="faint" x-text="shown + ' of ' + total"><?= count($journals) ?></span>
           <button type="button" class="btn btn-secondary btn-sm" @click="set(false)"><?= pf_icon('collapse') ?> Exit full screen <kbd class="kbd">Esc</kbd></button>
         </div>
         <div class="sheet-scroll" tabindex="0" role="region" aria-label="Potential journals" x-ref="scroll">
           <table class="table sheet">
             <thead>
               <tr>
-                <th scope="col" class="pin">Journal name</th>
-                <th scope="col">Link</th>
-                <th scope="col">IF</th>
-                <th scope="col">CS</th>
-                <th scope="col">APC</th>
-                <th scope="col">Suggested by</th>
-                <th scope="col">Submitted by</th>
-                <th scope="col">Published</th>
+                <?= $sortTh(0, 'Journal name', 'pin') ?>
+                <?= $sortTh(1, 'Link') ?>
+                <?= $sortTh(2, 'IF') ?>
+                <?= $sortTh(3, 'CS') ?>
+                <?= $sortTh(4, 'APC') ?>
+                <?= $sortTh(5, 'Suggested by') ?>
+                <?= $sortTh(6, 'Submitted by') ?>
+                <?= $sortTh(7, 'Published') ?>
                 <th scope="col" class="pin-end max-lg:hidden"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -471,6 +504,8 @@ require __DIR__ . '/../src/includes/header.php';
             </tbody>
           </table>
         </div>
+        <?= $noMatch ?>
+      </div>
       </div>
     <?php endif; ?>
 
@@ -485,10 +520,14 @@ require __DIR__ . '/../src/includes/header.php';
     <div class="flex flex-col gap-4">
       <?php foreach ($templates as $i => $t):
           $fid = (string)$t['id'];
-          $open = $formId === $fid; ?>
+          $open = $formId === $fid;
+          // A template's first line is its title when there is more text below it.
+          $tLines = explode("\n", trim((string)$t['body']), 2);
+          $tTitle = count($tLines) === 2 && mb_strlen(trim($tLines[0]), 'UTF-8') <= 120 ? trim($tLines[0]) : 'Template ' . ($i + 1);
+          $tBody  = $tTitle === trim($tLines[0]) && count($tLines) === 2 ? trim($tLines[1]) : trim((string)$t['body']); ?>
         <article class="card" x-data="{ editing: <?= $open ? 'true' : 'false' ?> }" aria-labelledby="tpl-<?= (int)$t['id'] ?>-h">
           <div class="flex items-start justify-between gap-4">
-            <h2 class="card-title" id="tpl-<?= (int)$t['id'] ?>-h">Template <?= $i + 1 ?></h2>
+            <h2 class="card-title break-words" id="tpl-<?= (int)$t['id'] ?>-h"><?= e($tTitle) ?></h2>
             <div class="flex shrink-0 gap-1" x-show="!editing">
               <button type="button" class="btn btn-secondary btn-sm" x-copy data-copy="<?= e($t['body']) ?>"><?= pf_icon('copy') ?> Copy</button>
               <?php if ($canEdit): ?>
@@ -499,14 +538,14 @@ require __DIR__ . '/../src/includes/header.php';
                   <?= $csrf ?>
                   <input type="hidden" name="action" value="delete_template">
                   <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
-                  <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Delete template <?= $i + 1 ?>"><?= pf_icon('trash') ?></button>
+                  <button class="btn btn-danger-ghost btn-sm" type="submit" aria-label="Delete template <?= e($tTitle) ?>"><?= pf_icon('trash') ?></button>
                 </form>
               <?php endif; ?>
             </div>
           </div>
 
           <div x-show="!editing"<?= $open ? ' x-cloak' : '' ?>>
-            <p class="mt-3 text-[0.9375rem] leading-relaxed break-words whitespace-pre-line"><?= $linkify($t['body']) ?></p>
+            <p class="mt-3 text-[0.9375rem] leading-relaxed break-words whitespace-pre-line"><?= $linkify($tBody) ?></p>
             <?php if ($canEdit): ?><p class="mt-3 text-sm text-muted-foreground-1"><?= e($edited($t)) ?></p><?php endif; ?>
           </div>
 

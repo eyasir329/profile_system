@@ -44,6 +44,16 @@ in `migrations/`, applied by the web container's entrypoint in name order.
   column order, rows grouped by course (D3 to R), empty cells blank, paper
   columns listing each paper, alternating row colours, and a numbered list
   with dividers wherever a cell holds several items.
+- **Students sheet UX:** frozen panes (Course, Student ID and both names
+  stay at the left while scrolling sideways), course filter chips with
+  counts on both tabs, a line between course groups, and **Download CSV**
+  of the current view with the workbook's headers (UTF-8 for Excel;
+  formula-like cells are made text).
+- **Resources UX:** tabs in two labelled groups ("Shared by teachers",
+  "Lab publications"); every sheet has an instant filter, "Only mine" for
+  students, a row count and sortable columns (journals by IF or CS);
+  templates use their first line as the title; one page width for every
+  tab so nothing jumps when switching.
 - **Teachers and admins** get a plain "My account" page: lab details show
   only while acting as a student.
 - **UI:** base text 16 px (was 15), small text 14 px (was 13), headings

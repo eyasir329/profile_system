@@ -107,7 +107,7 @@ internet: it covers the settings in `.env` that must change first.
 | `/profile.php` | student | Own lab details, entries (theses, papers, publications, awards) and courses, edited in place. Others see only their name, email and roles |
 | `/resources.php` | signed in | Lab resources, one tab per sheet; `?tab=` followed by `templates`, `data`, `journals`, `pub_journals`, `pub_proceedings`, `pub_presentations` or `awards`. Teachers and admins edit the first three; students take journals |
 | `/settings.php` | signed in | Name, email, theme, password, 2FA, deactivate |
-| `/students.php` | teacher | The Students sheet (`?group=completed` for the Completed tab); `?id=` for one student |
+| `/students.php` | teacher | The Students sheet: Current students and Completed tabs (`?group=completed`), filter by course (`?course=D3`, `?course=none`), search, full screen, and **Download CSV** of what is shown (`?export=csv`, the workbook's headers, opens in Excel). Course, Student ID and both names stay frozen at the left while scrolling sideways. `?id=` for one student |
 | `/admin/index.php` | admin | Users: everyone as a list, students as the sheet (`?view=sheet`), one user (`?id=`) |
 | `/admin/user.php` | admin | Create or edit a user |
 | `/invites.php` | teacher, admin | Create and cancel invitation links |
