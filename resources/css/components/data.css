@@ -147,6 +147,18 @@
   .sheet thead .pin {
     @apply z-20 bg-muted;
   }
+  /* A last column that stays at the right edge (row actions), so it is
+     never hidden when the sheet is wider than the page. Opaque like .pin. */
+  .sheet .pin-end {
+    @apply sticky right-0 z-[5] bg-card text-right;
+    box-shadow: -1px 0 0 var(--table-line);
+  }
+  .sheet thead .pin-end {
+    @apply z-20 bg-muted;
+  }
+  .sheet tbody tr:hover .pin-end {
+    @apply bg-layer-hover;
+  }
   .sheet tbody tr:hover .pin {
     @apply bg-layer-hover;
   }

@@ -29,8 +29,10 @@ in `migrations/`, applied by the web container's entrypoint in name order.
   Other; migration `022`).
 - **Resources page** (`/resources.php`), linked for every role: Templates
   and Open data and code (teachers edit, students read; migration `025`),
-  Potential journals (one text block each; students take or release them
-  and see who took what; migration `028`, `029`), and read-only tabs of
+  Potential journals (a sheet: Journal name, Link, IF, CS, APC, Suggested
+  by, Submitted by, Published; teachers add and edit them, students take or
+  release them and mark their own submission published; migrations `028`
+  to `030`), and read-only tabs of
   everyone's PublishedJournals, Conf.Proceedings, Conf.PresentationOnly
   and Awards, with full screen.
 - **Completed courses.** A student marks the current course completed

@@ -27,7 +27,7 @@ follows the role they are **acting as**.
 **Resources** (`/resources.php`) is shared by the whole lab, one tab per
 workbook sheet: Templates and Open data and code (kept by teachers,
 read-only for students); Potential journals (teachers list them, students
-take or release them); and PublishedJournals, Conf.Proceedings,
+take or release them and mark their own submission published); and PublishedJournals, Conf.Proceedings,
 Conf.PresentationOnly and Awards (everyone's rows, read-only here;
 students edit their own on My profile).
 
@@ -144,7 +144,7 @@ docs/                DESIGN, COMPONENTS, FRONTEND, PERMISSIONS, TUNNEL
 | `lab_publications` | Published journals, conference proceedings and presentations (three `kind`s), one row each |
 | `lab_awards` | Awards, one row each |
 | `lab_templates`, `lab_resources` | Shared templates, and shared open data and code links (teachers edit) |
-| `lab_journals`, `lab_journal_takers` | Potential journals (one text block each) and which students took them |
+| `lab_journals`, `lab_journal_takers` | Potential journals (name, link, IF, CS, APC, suggested by) and the students who took each, with whether their submission is published |
 | `invites` | Invitation links (hashed token, roles, uses, expiry) |
 | `two_factor` | TOTP secret and backup codes |
 | `password_resets`, `email_verifications`, `account_restorations` | One-time tokens |
@@ -159,7 +159,7 @@ older profile sections, contact fields, photo and profile type;
 university email; `021` added the course history; `022` added "Other" as
 an enrolment month; `023` the thesis and paper entries; `024` publications
 and awards; `025` templates and open data and code; `026` and `027` course
-completion and its saved copy; `028` and `029` potential journals.
+completion and its saved copy; `028`, `029` and `030` potential journals (`030` gives them the sheet's columns).
 
 ## Documentation
 

@@ -191,6 +191,8 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
             if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to lab resources']; }
             if ($detail === 'take_journal')    { return ['check', 'Took a potential journal']; }
             if ($detail === 'release_journal') { return ['edit', 'Released a potential journal']; }
+            if ($detail === 'publish_journal')   { return ['check', 'Marked a journal submission as published']; }
+            if ($detail === 'unpublish_journal') { return ['edit', 'Unmarked a published journal']; }
             $what = str_ends_with($detail, '_template') ? 'a template' : (str_ends_with($detail, '_journal') ? 'a potential journal' : 'a data/code link');
             $verb = ['add' => 'Added', 'edit' => 'Edited', 'delete' => 'Deleted'][explode('_', $detail)[0]] ?? 'Changed';
             return ['edit', $verb . ' ' . $what . ' in lab resources'];
