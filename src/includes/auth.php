@@ -11,6 +11,10 @@ require_once __DIR__ . '/ratelimit.php';
 if (session_status() !== PHP_SESSION_ACTIVE) {
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
+    // Keep session files as long as the idle limit in require_login()
+    // (SESSION_IDLE_SECONDS), so a session ends when that says, not at
+    // PHP's default 24 minutes picked at random by garbage collection.
+    ini_set('session.gc_maxlifetime', '7200');
     // The Secure cookie flag is set when:
     //   - the request arrived over HTTPS directly, OR
     //   - we are behind a trusted proxy (TRUST_PROXY=1) and the proxy
@@ -26,7 +30,12 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
             && strcasecmp((string)$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') === 0;
         $cookieSecure = $directHttps || $forwardedHttps;
     }
+    // Over HTTPS the cookie is "__Host-" prefixed: browsers then accept it
+    // only with Secure, Path=/ and no Domain, so a sibling site (another
+    // *.trycloudflare.com tunnel, a subdomain) can't plant or overwrite it.
+    session_name($cookieSecure ? '__Host-ps_session' : 'ps_session');
     session_set_cookie_params([
+        'path'     => '/',
         'httponly' => true,
         'secure'   => $cookieSecure,
         'samesite' => 'Lax',
@@ -100,9 +109,43 @@ function require_login(): void
             if ((int)$row['session_epoch'] !== (int)($_SESSION['epoch'] ?? 0)) {
                 end_session('/login.php?signed_out=1');
             }
-        } catch (Throwable $e) { /* ignore — don't break auth on DB hiccup */ }
+        } catch (Throwable $e) {
+            // Fail closed: if the account can't be checked, a deleted or
+            // signed-out session must not get through on cached roles.
+            error_log('auth.require_login: ' . $e->getMessage());
+            require_once __DIR__ . '/error_page.php';
+            render_error_page(503, '', minimal: true);
+        }
+    } else {
+        require_once __DIR__ . '/error_page.php';
+        render_error_page(503, '', minimal: true);
     }
+    // Idle and absolute limits, so a session left open on a shared lab PC
+    // (or a stolen cookie) does not stay valid for ever.
+    $now = time();
+    $started = (int)($_SESSION['signed_in_at'] ?? 0);
+    $seen    = (int)($_SESSION['last_seen_at'] ?? 0);
+    if ($started === 0) {
+        // Sessions from before this check: start the clock now.
+        $_SESSION['signed_in_at'] = $started = $now;
+    }
+    if ($now - $started > SESSION_ABSOLUTE_SECONDS || ($seen !== 0 && $now - $seen > SESSION_IDLE_SECONDS)) {
+        end_session('/login.php?expired=1');
+    }
+    $_SESSION['last_seen_at'] = $now;
     ensure_active_role_valid();
+}
+
+/** A session ends after this long without a request... */
+const SESSION_IDLE_SECONDS = 2 * 3600;
+/** ...and this long after signing in, whatever happens. */
+const SESSION_ABSOLUTE_SECONDS = 7 * 86400;
+
+/** Start the idle and absolute session clocks (call at every sign-in). */
+function session_mark_signed_in(): void
+{
+    $_SESSION['signed_in_at'] = time();
+    $_SESSION['last_seen_at'] = time();
 }
 
 /** Destroy the session and its cookie, then redirect. */
@@ -453,7 +496,9 @@ function second_factor_check(int $userId, string $input): string
 {
     $pdo = auth_pdo();
     $bucket = 'totp:' . $userId;
-    if (too_many_attempts($bucket, 5, 600)) { return 'locked'; }
+    // One check at a time per account: parallel requests can neither slip
+    // past the limit nor spend the same backup code twice.
+    if (!rate_limit_lock($bucket) || too_many_attempts($bucket, 5, 600)) { return 'locked'; }
 
     $st = $pdo->prepare('SELECT secret, backup_codes FROM two_factor WHERE user_id = :u AND enabled = 1');
     $st->execute(['u' => $userId]);
@@ -463,11 +508,12 @@ function second_factor_check(int $userId, string $input): string
         $code = backup_code_normalize($input);
         if (preg_match('/^\d{6}$/', $code) && ($step = totp_matching_step((string)$row['secret'], $code)) !== null) {
             // Each code works once: refuse a step at or before the last one used.
-            $last = $pdo->prepare('SELECT UNIX_TIMESTAMP(last_used_at) FROM two_factor WHERE user_id = :u');
-            $last->execute(['u' => $userId]);
-            if ((int)$last->fetchColumn() < $step * 30) {
-                $pdo->prepare('UPDATE two_factor SET last_used_at = FROM_UNIXTIME(:t) WHERE user_id = :u')
-                    ->execute(['t' => $step * 30, 'u' => $userId]);
+            // Claim the step in one statement: it only succeeds if no code
+            // of this step or a later one was used before (no replay).
+            $claim = $pdo->prepare('UPDATE two_factor SET last_used_at = FROM_UNIXTIME(:t)
+                                     WHERE user_id = :u AND (last_used_at IS NULL OR last_used_at < FROM_UNIXTIME(:t2))');
+            $claim->execute(['t' => $step * 30, 't2' => $step * 30, 'u' => $userId]);
+            if ($claim->rowCount() === 1) {
                 $result = 'totp';
             }
         } elseif (preg_match('/^[0-9A-F]{8}$/', $code)) {
@@ -545,6 +591,7 @@ function complete_totp_login(int $userId): void
     }
     // A new session id now that the account is fully signed in.
     session_regenerate_id(true);
+    session_mark_signed_in();
     $_SESSION['user_id']       = (int)$u['id'];
     $_SESSION['user_name']     = (string)$u['name'];
     $_SESSION['epoch']         = session_epoch_of($pdo, (int)$u['id']);
@@ -557,6 +604,7 @@ function complete_totp_login(int $userId): void
     $_SESSION['user_roles'] = $roles;
     $_SESSION['user_role']  = $roles[0] ?? '';
     unset($_SESSION['totp_verified'], $_SESSION['pending_totp_user_id']);
+    log_activity((int)$u['id'], 'login', $_SESSION['user_role'] . ';2fa');
     header('Location: ' . ($_SESSION['post_login_redirect'] ?? url_home()));
     unset($_SESSION['post_login_redirect']);
     exit;

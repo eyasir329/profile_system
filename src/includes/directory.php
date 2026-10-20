@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 /**
- * People directory: the shared page behind
- *   /students.php      (teacher: students only, read-only)
- *   /admin/index.php   (admin: every user, with create / edit / delete)
+ * People directory: the page behind /students.php (teacher: students only,
+ * read-only). Admins have their own pages since the admin redesign
+ * (/admin/index.php and /admin/user.php); the "users" scope below is kept
+ * for compatibility but no page uses it.
  *
  * The including page does the access check and sets $DIR:
  *   scope     'students' | 'users'
@@ -391,6 +392,7 @@ $noun     = fn(int $n): string => $n . ' ' . ($n === 1 ? $DIR['one'] : $DIR['man
 // the workbook's column headers. UTF-8 with a BOM so Excel reads Japanese.
 if ($view === 'sheet' && ($_GET['export'] ?? '') === 'csv') {
     $file = 'students-' . $group . ($course !== '' ? '-' . $course : '') . '-' . date('Y-m-d') . '.csv';
+    log_activity(current_user_id(), 'students_export', 'group=' . $group . ($course !== '' ? ';course=' . $course : '') . ($q !== '' ? ';search' : ''));
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $file . '"');
     // A cell starting with = + - @ would run as a formula in Excel: make it text.

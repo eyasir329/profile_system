@@ -112,9 +112,13 @@ services:
       #
       # To go back to "image-baked" mode (recommended for production),
       # remove these three lines and rebuild with `docker compose up --build`.
-      - ./public:/var/www/html:rw
-      - ./src:/var/www/src:rw
-      - ./database:/var/www/database:rw
+      #
+      # Read-only: the web server reads the code but can never change it,
+      # so a bug that lets someone write files can't plant a script in the
+      # project on the host. Uploads have their own writable volume above.
+      - ./public:/var/www/html:ro
+      - ./src:/var/www/src:ro
+      - ./database:/var/www/database:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/"]
       interval: 30s

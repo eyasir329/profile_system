@@ -33,6 +33,7 @@ $pdo = auth_pdo();
 if ($action === 'disable') {
     $pdo->prepare('DELETE FROM two_factor WHERE user_id = :u')->execute(['u' => $userId]);
     $pdo->prepare('UPDATE users SET totp_required = 0 WHERE id = :u')->execute(['u' => $userId]);
+    log_activity($userId, 'two_factor_off', null);
     $who = $pdo->prepare('SELECT name, email FROM users WHERE id = :u');
     $who->execute(['u' => $userId]);
     if ($w = $who->fetch()) { mail_two_factor_off((string)$w['email'], (string)$w['name']); }
@@ -56,6 +57,7 @@ if ($action === 'confirm') {
         ->execute(['bc' => backup_codes_store($codes), 'u' => $userId]);
     $pdo->prepare('UPDATE users SET totp_required = 1 WHERE id = :u')
         ->execute(['u' => $userId]);
+    log_activity($userId, 'two_factor_on', null);
     $_SESSION['tf_new_codes'] = $codes;
     header('Location: ' . url_settings() . '?tab=security&totp_enabled=1#two-factor');
     exit;

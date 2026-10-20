@@ -13,6 +13,7 @@ declare(strict_types=1);
  *   mail_backup_code_used()    notice after signing in with a backup code
  *   mail_verify_new_email()    confirm a new sign-in address (link, 24 hours)
  *   mail_account_deactivated() restore link (30 days) after deactivating
+ *   mail_custom()              a message an admin writes (/admin/emails.php)
  *
  * Wording: say what happened, what to do next, and what to do if it was
  * not you. Plain text only here; mailer.php does the HTML.
@@ -75,7 +76,7 @@ function mail_password_changed(string $to, string $name, bool $byAdmin = false):
         'heading' => 'Your password was changed',
         'paras'   => [
             'Hi ' . $name . ', the password for your account was changed'
-                . ($byAdmin ? ' by an admin' : '') . ' on ' . date('F j, Y \a\t H:i') . ' (server time).',
+                . ($byAdmin ? ' by an admin' : '') . ' on ' . date('F j, Y \a\t H:i') . ' (' . app_timezone_label() . ').',
             $byAdmin ? 'Use the new password the admin gave you to sign in.' : 'If it was you, there is nothing else to do.',
         ],
         'button'  => ['label' => 'Reset my password', 'url' => mail_link(url_forgot())],
@@ -90,7 +91,7 @@ function mail_email_changed(string $oldEmail, string $name, string $newEmail): b
         'subject' => 'Your Profile System sign-in email was changed',
         'heading' => 'Your sign-in email was changed',
         'paras'   => [
-            'Hi ' . $name . ', the email address for your account was changed to ' . mail_mask($newEmail) . ' on ' . date('F j, Y \a\t H:i') . ' (server time).',
+            'Hi ' . $name . ', the email address for your account was changed to ' . mail_mask($newEmail) . ' on ' . date('F j, Y \a\t H:i') . ' (' . app_timezone_label() . ').',
             'From now on, sign in with the new address. This is the last email sent to this one.',
         ],
         'button'  => null,
@@ -105,7 +106,7 @@ function mail_two_factor_off(string $to, string $name, bool $byAdmin = false): b
         'subject' => 'Two-factor sign-in was turned off',
         'heading' => 'Two-factor sign-in is off',
         'paras'   => [
-            'Hi ' . $name . ', two-factor sign-in was ' . ($byAdmin ? 'reset by an admin' : 'turned off') . ' for your account on ' . date('F j, Y \a\t H:i') . ' (server time). Signing in now needs only your password.',
+            'Hi ' . $name . ', two-factor sign-in was ' . ($byAdmin ? 'reset by an admin' : 'turned off') . ' for your account on ' . date('F j, Y \a\t H:i') . ' (' . app_timezone_label() . '). Signing in now needs only your password.',
             'You can turn it back on in Settings → Security.',
         ],
         'button'  => ['label' => 'Open security settings', 'url' => mail_link(url_settings() . '?tab=security')],
@@ -135,7 +136,7 @@ function mail_backup_code_used(string $to, string $name, int $left): bool
         'subject' => 'A backup code was used to sign in',
         'heading' => 'You signed in with a backup code',
         'paras'   => [
-            'Hi ' . $name . ', a backup code was used instead of your authenticator app to sign in on ' . date('F j, Y \a\t H:i') . ' (server time). That code no longer works.',
+            'Hi ' . $name . ', a backup code was used instead of your authenticator app to sign in on ' . date('F j, Y \a\t H:i') . ' (' . app_timezone_label() . '). That code no longer works.',
             $left === 0
                 ? 'You have no backup codes left. Make a new set in Settings → Security, or you could be locked out.'
                 : 'You have ' . $left . ' backup ' . ($left === 1 ? 'code' : 'codes') . ' left. If you are running low, make a new set in Settings → Security.',
@@ -161,4 +162,22 @@ function mail_verify_new_email(string $newEmail, string $name, string $token): b
         ],
         'reason'  => 'You got this email because someone asked to use this address for a Profile System account.',
     ]);
+}
+
+/**
+ * An email an admin wrote at /admin/emails.php. The text is the admin's own,
+ * so it is logged in full (kind "custom").
+ *
+ * @param list<string> $paras  paragraphs, already split
+ */
+function mail_custom(string $to, string $name, string $subject, array $paras, int $sentBy, ?int $resendOf = null): bool
+{
+    return mail_send($to, $name, [
+        'subject' => $subject,
+        'heading' => $subject,
+        'paras'   => $paras,
+        'button'  => null,
+        'after'   => [],
+        'reason'  => 'This message was sent to you by an admin of the lab’s Profile System.',
+    ], ['kind' => 'custom', 'sent_by' => $sentBy, 'resend_of' => $resendOf]);
 }

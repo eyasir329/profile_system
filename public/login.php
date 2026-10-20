@@ -48,6 +48,9 @@ if (isset($_GET['reset']) && $_GET['reset'] === '1') {
 if (isset($_GET['signed_out']) && $_GET['signed_out'] === '1') {
     $flash[] = ['type' => 'info', 'title' => 'Signed out', 'body' => 'Your password or sign-in settings changed, so you were signed out everywhere. Log in again.'];
 }
+if (isset($_GET['expired']) && $_GET['expired'] === '1') {
+    $flash[] = ['type' => 'info', 'title' => 'Session ended', 'body' => 'You were signed out after a while without activity. Log in again.'];
+}
 if (isset($_GET['deactivated']) && $_GET['deactivated'] === '1') {
     $flash[] = ['type' => 'warn', 'title' => 'Account deactivated', 'body' => 'Your account is currently deactivated. Use the link in your deactivation email to reactivate it, or contact support.'];
 }
@@ -63,6 +66,7 @@ if (isset($_GET['restored']) && $_GET['restored'] === '1') {
 function finalize_login(int $userId, string $name, array $roles, string $chosenRole): void
 {
     session_regenerate_id(true);
+    session_mark_signed_in();
     global $pdo;
     $_SESSION['epoch']         = session_epoch_of($pdo, $userId);
     $_SESSION['user_id']       = $userId;
@@ -70,7 +74,6 @@ function finalize_login(int $userId, string $name, array $roles, string $chosenR
     $_SESSION['user_roles']    = $roles;
     $_SESSION['user_name']     = $name;
     unset($_SESSION['_pending_user']);
-    log_activity($userId, 'login', $chosenRole);
 
     // TOTP gate. If the user has 2FA enabled, stash the id in
     // `pending_totp_user_id` and require the TOTP step before the
@@ -82,6 +85,9 @@ function finalize_login(int $userId, string $name, array $roles, string $chosenR
         $totpRow = $t->fetch();
     } catch (Throwable $e) { $totpRow = null; }
     if ($totpRow && (int)$totpRow['totp_required'] === 1) {
+        // Not signed in yet: the "login" event is logged once the code is right
+        // (complete_totp_login()); this records that the password was.
+        log_activity($userId, 'login_password_ok', $chosenRole);
         $_SESSION['pending_totp_user_id'] = $userId;
         // Don't keep user_id set until TOTP succeeds.
         unset($_SESSION['user_id']);
@@ -91,6 +97,7 @@ function finalize_login(int $userId, string $name, array $roles, string $chosenR
         exit;
     }
 
+    log_activity($userId, 'login', $chosenRole);
     header('Location: ' . url_dashboard());
     exit;
 }
@@ -153,8 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ip          = client_ip();
             $emailBucket = 'email:' . strtolower($email);
             $ipBucket    = 'ip:' . $ip;
-            $overEmail   = too_many_attempts($emailBucket, 5, 900);
-            $overIp      = too_many_attempts($ipBucket, 20, 600);
+            // One attempt at a time per email and per IP (rate_limit_lock()),
+            // so a burst of parallel requests can't all slip under the limit
+            // before the first failure is recorded.
+            $lockedOut   = !rate_limit_lock($emailBucket) || !rate_limit_lock($ipBucket);
+            $overEmail   = $lockedOut || too_many_attempts($emailBucket, 5, 900);
+            $overIp      = $lockedOut || too_many_attempts($ipBucket, 20, 600);
             if ($overEmail || $overIp) {
                 $errors['email'] = 'Too many failed attempts. Please try again in a few minutes.';
             }
@@ -175,11 +186,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors['email'] = 'Your account has no roles assigned. Please contact an admin.';
                 } elseif (count($roles) === 1) {
                     // Single-role user: skip the picker, finalize now.
-                    // Clear any prior failed-attempt rows for this
-                    // account / IP so a legitimate user isn't punished
-                    // for earlier typos.
+                    // Clear this account's failed attempts so its owner
+                    // isn't punished for earlier typos. The IP's count is
+                    // left to expire: clearing it would let anyone with an
+                    // account reset it by signing in between guesses at
+                    // other accounts.
                     clear_attempts($emailBucket);
-                    clear_attempts($ipBucket);
                     finalize_login(
                         (int)$u['id'],
                         (string)$u['name'],
@@ -189,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Multi-role user: stash and show the picker.
                     clear_attempts($emailBucket);
-                    clear_attempts($ipBucket);
                     $_SESSION['_pending_user'] = [
                         'id'       => (int)$u['id'],
                         'name'     => (string)$u['name'],

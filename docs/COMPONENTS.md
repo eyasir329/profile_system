@@ -6,7 +6,7 @@ For layout (grids, spacing, widths) use Tailwind utilities directly.
 
 Contents: [Page](#page) · [Buttons](#buttons) · [Forms](#forms) ·
 [Surfaces](#surfaces) · [Feedback](#feedback) · [Navigation](#navigation) ·
-[Data](#data) · [Overlays](#overlays) · [Profile](#profile) ·
+[Data](#data) · [Overlays](#overlays) · [Profile](#profile) · [Emails](#emails) · [Charts](#charts) ·
 [PHP helpers](#php-helpers)
 
 ## Page
@@ -106,6 +106,15 @@ an `aria-label`.
 
 `.choice-list.is-row` lays three options side by side from `sm`.
 `.check` is the plain checkbox-with-label row.
+
+**Switch** (on/off toggle; a real checkbox, so it posts like one):
+
+```php
+<label class="switch">
+  <input type="checkbox" role="switch" name="mail_enabled" value="1" aria-labelledby="...">
+  <span class="switch-track"></span>
+</label>
+```
 
 ## Surfaces
 
@@ -323,13 +332,72 @@ Used by `/profile.php`.
 The fields themselves come from `lab_field_defs()` in
 `src/includes/lab_fields.php`; do not hard-code them in a template.
 
+## Emails
+
+Used by `/admin/emails.php`; styles in `resources/css/components/mail.css`.
+
+| Class | Use |
+| --- | --- |
+| `.stat-strip`, `.stat-note` | A row of four numbers above a log (`<dl>`, one `<div>` per number; a link in `<dd>` makes it a filter; `.is-danger` paints it red) |
+| `tr.table-group` | A day heading row inside a `.table` (`<th colspan>`); `.card-list-day` is the same in the phone list |
+| `tr.has-row-link` + `.row-link` | The whole row opens the link in its first cell |
+| `.cell-sub`, `.cell-error` | Second line in a cell; a one-line error under a badge |
+| `.pick`, `.pick-head`, `.pick-list`, `.pick-row`, `.pick-empty`, `.pick-foot` | Search box over a scrolling list of people with checkboxes |
+| `.chip-list`, `.chip` | Picked items as pills with a remove button |
+| `.send-bar`, `.send-bar-note` | The bottom row of a send form: who it goes to, then the buttons |
+| `.setting-row`, `.setting-body`, `.setting-title`, `.setting-meta`, `.setting-stat`, `.setting-off` | One setting with a `.switch` on the right; `.is-muted` fades it (not its `.setting-off` warning) |
+| `.server-facts` | Read-only label / value pairs in monospace (mail server settings) |
+| `.user-summary` (with `.completion`) | Admin › one user: label / value summary inside the identity panel |
+| `.save-bar` (`.is-dirty`) | A form's Save row that sticks to the bottom of the screen while editing |
+| `.section.is-danger` | A section with a red marker (Remove access) |
+| `.bulk-bar`, `.bulk-bar-count`, `.pick-all`, `.pick-one`, `tr.is-selected` | Admin › Users: select rows, then act on them (Alpine `bulkSelect`) |
+| `.attention`, `.attention-item` (`.is-danger`, `.is-warning`, `.is-info`), `.attention-icon` | Dashboard: "Needs attention" rows with one action each |
+| `.palette-trigger`, `.palette-backdrop`, `.palette`, `.palette-search`, `.palette-list`, `.palette-item`, `.palette-kind`, `.palette-kbd`, `.palette-foot` | The admin command palette (Alpine `palette`, Ctrl/⌘ + K) |
+| `.stat-strip.is-2col` | The stat strip as two by two, for a narrower column |
+| `.mail-preview`, `.mail-head`, `.mail-canvas`, `.mail-brand`, `.mail-logo`, `.mail-body`, `.mail-button`, `.mail-foot`, `.mail-placeholder` | An email as the recipient sees it, in the same layout as `mail_render_html()` |
+
+## Charts
+
+HTML/CSS charts from `src/includes/charts.php` (styles in
+`resources/css/components/chart.css`), used by Admin › Activity and
+Admin › Emails. Each returns a `<figure class="chart">` with a title, a
+legend when there are two or more series, a hover/focus tooltip (the
+`x-chart` directive) and a **Show as table** twin.
+
+```php
+<?= chart_columns(['sent' => ['Sent', '--series-1'], 'failed' => ['Failed', '--series-alert']],
+                  [['label' => 'Mon, Oct 12', 'tick' => 'Oct 12', 'values' => ['sent' => 4, 'failed' => 1]]],
+                  ['title' => 'Emails per day', 'desc' => 'Last 30 days.', 'unit' => 'emails']) ?>
+<?= chart_heatmap($grid /* [0..6 Mon..Sun][0..23] */, ['title' => 'When people are active', 'unit' => 'events']) ?>
+<?= chart_bars([['label' => 'Aiko', 'value' => 42, 'href' => '...']], ['title' => 'Most active people']) ?>
+```
+
+Colour roles (never raw hex in templates): `--series-1` … `--series-3`
+(categorical, in this order, never cycled; validated all-pairs for
+colour-blind and normal vision on the card surface in both themes),
+`--series-alert` (the status red, only beside `--series-1`: emphasis
+form), `--series-muted` (de-emphasis grey), `--heat-0` … `--heat-7` (one
+blue ramp). Do not put red and green side by side: they fail the
+colour-blind check. Text never takes a series colour.
+
+| Class | Use |
+| --- | --- |
+| `.chart`, `.chart-head`, `.chart-title`, `.chart-desc`, `.chart-legend`, `.chart-key` | The card, its title block and legend |
+| `.chart-plot`, `.chart-grid`, `.chart-cols`, `.chart-col`, `.chart-stack`, `.chart-x` (`.is-dense`) | Stacked columns: hairline grid, columns ≤ 24 px with a 4 px rounded top and 2 px gaps |
+| `.heat`, `.heat-hour`, `.heat-day`, `.heat-cell[data-step]`, `.heat-scale` | Weekday × hour heatmap and its Less–More scale |
+| `.bars`, `.bars-label`, `.bars-track`, `.bars-fill`, `.bars-value` | Horizontal bars with the value at the tip |
+| `.chart-table` | The `<details>` table twin |
+| `.chart-tip` | The one tooltip, created on `<body>` by `x-chart` |
+| `.chart-grid-2` | Two charts side by side from `lg` |
+| `.activity-line` (`.is-warning`, `.is-danger`) | One activity event: icon and sentence (Admin › Activity) |
+
 ## PHP helpers
 
 All in `src/includes/ui.php`. Each returns an HTML string.
 
 | Helper | Returns |
 | --- | --- |
-| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot expand collapse cap book folder download` |
+| `pf_icon($name, $class = '')` | A 16 px stroke icon. Names: `edit copy trash plus camera link chevron caret back check close menu search user users settings lock shield login logout swap palette alert info mail dot pulse expand collapse cap book folder download` |
 | `ui_avatar($photo, $name, $size = '')` | Initial avatar (pass `null` for the photo) |
 | `ui_role($role)`, `ui_roles($roles)` | Role with its dot; a list, or a "No role" badge |
 | `ui_alert($type, $html)` | Inline alert |
@@ -337,7 +405,10 @@ All in `src/includes/ui.php`. Each returns an HTML string.
 | `ui_progress($percent, $labelledBy = '')` | Progress bar |
 | `ui_multi($items)` | One item as text, several as a numbered list with dividers |
 | `ui_ago($seconds, $absolute)` | "5 minutes ago" |
-| `ui_activity($kind, $detail, $count)` | `[icon, sentence]` for an activity row |
+| `ui_activity($kind, $detail, $count)` | `[icon, sentence]` for an activity row (second person, for the member's dashboard) |
+| `ui_activity_admin($kind, $detail)` | `[icon, sentence, tone]` for Admin › Activity (third person; tone `warning` / `danger` for events worth a look) |
+| `activity_group_of($kind)` | The `ACTIVITY_GROUPS` area of a kind (Sign-ins, Security, Account, …) |
+| `ui_device($userAgent)` | "Chrome on Windows" |
 
 Icons are decorative (`aria-hidden`). Pair them with text, or put an
 `aria-label` on the button.
@@ -347,9 +418,13 @@ Icons are decorative (`aria-hidden`). Pair them with text, or put an
 | Helper | File | Use |
 | --- | --- | --- |
 | `render_error_page($code, $detail = '', minimal: false)` | `src/includes/error_page.php` | Send an error status and the error page, then stop. `minimal: true` when the session or database may be unavailable |
+| `mail_custom($to, $name, $subject, $paras, $sentBy)` | `src/includes/mail_templates.php` | An admin-written email (logged in full, kind `custom`) |
+| `mail_types()`, `mail_type_enabled($kind)`, `mail_off_reason($kind)`, `mail_setting($name, $default)`, `mail_settings_save($pdo, $values, $by)` | `src/includes/mailer.php` | Every kind of email and what switching it off means; whether one will be sent (server set up, master switch, its own switch) and why not; read and save Emails › Settings |
 | `mail_invitation()`, `mail_password_reset()`, `mail_password_changed()`, `mail_email_changed()`, `mail_two_factor_off()`, `mail_backup_code_used()`, `mail_verify_new_email()`, `mail_account_deactivated()` | `src/includes/mail_templates.php` | Send one email; true when the server accepted it. Never throws |
-| `mail_send($to, $name, $msg)`, `mail_enabled()`, `mail_link($path)` | `src/includes/mailer.php` | Low-level sending (one HTML + text layout); whether email is set up; an absolute link from `APP_URL` |
+| `mail_send($to, $name, $msg, $meta = [])`, `mail_enabled()`, `mail_link($path)` | `src/includes/mailer.php` | Low-level sending (one HTML + text layout), which also writes every attempt to `email_log` (links in system emails are stored as `[link hidden]`); whether email is set up; an absolute link from `APP_URL` |
 | `request_email_change($pdo, $userId, $name, $newEmail)` | `src/includes/email_change.php` | Change your own sign-in email: `'sent'` (confirmation emailed), `'changed'` (no email set up) or `'failed'` |
 | `second_factor_check($userId, $input)` | `src/includes/auth.php` | The two-factor step: `'totp'`, `'backup'`, `'locked'` or `''` |
 | `session_epoch_bump($pdo, $userId, $keepCurrent = true)` | `src/includes/auth.php` | Sign out every other session of an account (call after any password or two-factor change) |
+| `app_timezone()`, `app_timezone_label($tz = null)` | `src/includes/db.php` | The site time zone (Admin › Site settings), applied to PHP and the DB connection on every request; "Asia/Dhaka (UTC+06:00)". Store moments as `TIMESTAMP`, never `DATETIME` |
+| `activity_retention($pdo)`, `activity_purge($pdo)` | `src/includes/housekeeping.php` | How long activity and its IP/browser are kept (Admin › Site settings); apply it now |
 | `housekeeping_run($pdo)` | `src/includes/housekeeping.php` | Delete what is past its keep-by date (also `make purge`) |

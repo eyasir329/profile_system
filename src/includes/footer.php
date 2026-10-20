@@ -11,7 +11,7 @@ if (!empty($hide_footer)) { return; }
 
 <footer class="site-footer">
   <div class="site-footer-inner">
-    <span>Profile System</span>
+    <span>Profile System<?php if (!empty($_SESSION['user_id']) && function_exists('app_timezone_label')): ?> <span class="text-muted-foreground-1">· Times in <?= e(app_timezone_label()) ?></span><?php endif; ?></span>
     <nav class="site-footer-links" aria-label="About this site">
       <a href="<?= e(url_about()) ?>"<?= ($page_id ?? '') === 'about' ? ' aria-current="page"' : '' ?>>About</a>
       <a href="<?= e(url_help()) ?>"<?= ($page_id ?? '') === 'help' ? ' aria-current="page"' : '' ?>>Help</a>

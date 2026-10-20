@@ -50,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
         $err = 'Could not restore your account. Please try again.';
     }
     if (!$err) {
+        log_activity((int)$userRow['user_id'], 'account_restore', 'link');
         header('Location: login.php?restored=1');
         exit;
     }

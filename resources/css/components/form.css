@@ -215,4 +215,37 @@
     @apply w-[9.5rem] text-center text-lg tracking-[0.3em] tabular-nums;
     font-family: var(--font-mono);
   }
+
+  /* On/off switch: a checkbox that reads as a toggle.
+     <label class="switch"><input type="checkbox" role="switch" name="x"><span class="switch-track"></span>
+       <span class="sr-only">What it turns on</span></label> */
+  .switch {
+    @apply relative inline-flex shrink-0 cursor-pointer items-center;
+  }
+  .switch input {
+    @apply sr-only;
+  }
+  .switch-track {
+    @apply relative block h-6 w-11 rounded-full border transition-colors;
+    background: var(--color-line-3, var(--layer-line));
+    border-color: var(--color-line-4, var(--control-line));
+  }
+  .switch-track::after {
+    content: "";
+    @apply absolute top-0.5 left-0.5 size-[1.125rem] rounded-full bg-white shadow-sm transition-transform;
+  }
+  .switch input:checked + .switch-track {
+    @apply border-primary bg-primary;
+  }
+  .switch input:checked + .switch-track::after {
+    @apply translate-x-5;
+  }
+  .switch input:focus-visible + .switch-track {
+    @apply ring-2 ring-offset-2;
+    --tw-ring-color: var(--primary);
+    --tw-ring-offset-color: var(--background);
+  }
+  .switch input:disabled + .switch-track {
+    @apply cursor-not-allowed opacity-50;
+  }
 }

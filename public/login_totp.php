@@ -24,8 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $uid    = (int)$_SESSION['pending_totp_user_id'];
     $result = second_factor_check($uid, (string)($_POST['totp'] ?? ''));
     if ($result === 'locked') {
+        log_activity($uid, 'login_2fa_locked', null);
         $err = 'Too many wrong codes. Wait 10 minutes and try again.';
     } elseif ($result === '') {
+        log_activity($uid, 'login_2fa_failed', null);
         $err = 'That code didn’t work. Enter the newest code from your app, or one of your backup codes.';
     } else {
         if ($result === 'backup') {

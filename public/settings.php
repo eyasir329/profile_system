@@ -223,6 +223,13 @@ if ($tab === 'security') {
     $tfRow = $tfSt->fetch();
     $tfEnabled = $tfRow && (int)$tfRow['enabled'] === 1;
     $tfSecret  = (string)($tfRow['secret'] ?? '');
+    // A setup still waiting for its first code with an old, non-standard key
+    // (Google Authenticator calls it "invalid"): swap in a standard one.
+    // Nobody can have added it to an app successfully, so nothing breaks.
+    if ($tfRow && !$tfEnabled && !totp_secret_is_standard($tfSecret)) {
+        $tfSecret = generate_totp_secret();
+        $pdo->prepare('UPDATE two_factor SET secret = :s WHERE user_id = :u AND enabled = 0')->execute(['s' => $tfSecret, 'u' => $userId]);
+    }
     // Backup codes are stored hashed: the plain codes exist only right
     // after they were made (setup_totp.php), shown once here.
     if ($tfEnabled && !empty($_SESSION['tf_new_codes']) && is_array($_SESSION['tf_new_codes'])) {
@@ -292,7 +299,7 @@ require __DIR__ . '/../src/includes/header.php';
             <input class="input" id="email" name="email" type="email" required maxlength="150" autocomplete="email"
                    value="<?= e($values['email']) ?>"<?= $invalid('email') ?> aria-describedby="email-hint email-err">
             <p class="hint" id="email-hint">You sign in with this address, and it is the email your teachers see.
-              <?php if (mail_enabled()): ?>A new address changes only after you confirm it from that inbox.<?php endif; ?></p>
+              <?php if (mail_type_enabled('verify_new_email')): ?>A new address changes only after you confirm it from that inbox.<?php endif; ?></p>
             <?php if (($pendingEmail = pending_email_change($pdo, $userId)) !== ''): ?>
               <p class="hint is-ok">Waiting for confirmation: <strong><?= e($pendingEmail) ?></strong>. Open the link we sent there (it works for 24 hours).</p>
             <?php endif; ?>

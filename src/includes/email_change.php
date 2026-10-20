@@ -26,9 +26,21 @@ require_once __DIR__ . '/validate.php';
  */
 function request_email_change(PDO $pdo, int $userId, string $name, string $newEmail): string
 {
-    if (!mail_enabled()) {
+    // Without a confirmation email (none set up, or switched off by an
+    // admin in Emails › Settings) the new address applies at once.
+    if (!mail_type_enabled('verify_new_email')) {
+        $old = $pdo->prepare('SELECT email FROM users WHERE id = :u');
+        $old->execute(['u' => $userId]);
+        $oldEmail = (string)$old->fetchColumn();
         $pdo->prepare('UPDATE users SET email = :e WHERE id = :u')->execute(['e' => $newEmail, 'u' => $userId]);
+        email_change_applied($pdo, $userId);
         log_activity($userId, 'account_update', 'email');
+        // Nothing confirmed the change, so tell the old address at least
+        // (when email is on at all): someone at an unlocked screen, or
+        // with a stolen session, can't move the account away silently.
+        if ($oldEmail !== '' && strcasecmp($oldEmail, $newEmail) !== 0) {
+            mail_email_changed($oldEmail, $name, $newEmail);
+        }
         return 'changed';
     }
     // Only the latest request counts.
@@ -45,6 +57,17 @@ function request_email_change(PDO $pdo, int $userId, string $name, string $newEm
     }
     log_activity($userId, 'email_change_requested', null);
     return 'sent';
+}
+
+/**
+ * Call after any change of a user's sign-in email. Password-reset links
+ * already sent went to the OLD address; if that mailbox is why the address
+ * was changed, they must stop working.
+ */
+function email_change_applied(PDO $pdo, int $userId): void
+{
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :u AND used_at IS NULL')
+        ->execute(['u' => $userId]);
 }
 
 /** The address waiting for confirmation, or ''. */

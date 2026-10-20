@@ -136,6 +136,12 @@ $st = $pdo->prepare(
 $st->execute($actAdmin ? [] : ['me' => $meId]);
 $invites = $st->fetchAll();
 
+// Admins: filter the list by state (?state=active|used|expired|cancelled), with counts.
+$stateCounts = ['' => count($invites)];
+foreach ($invites as $inv) { $k = invite_state($inv); $stateCounts[$k] = ($stateCounts[$k] ?? 0) + 1; }
+$stateFilter = $actAdmin && in_array($_GET['state'] ?? '', ['active', 'used', 'expired', 'cancelled'], true) ? (string)$_GET['state'] : '';
+$listed = $stateFilter === '' ? $invites : array_values(array_filter($invites, fn($i) => invite_state($i) === $stateFilter));
+
 $joined = []; // invite id => [names]
 if ($invites) {
     $ids = implode(',', array_map(fn($i) => (int)$i['id'], $invites));
@@ -174,7 +180,7 @@ require __DIR__ . '/../src/includes/header.php';
       <?php else: ?>
         <h2 class="flex items-center gap-2 font-bold" id="inv-fresh-h"><?= pf_icon('check') ?> Invitation link created</h2>
         <?php if (($fresh['emailed'] ?? null) === false): ?>
-          <p class="mt-1 font-medium text-warning">The email to <?= e($fresh['email']) ?> could not be sent.</p>
+          <p class="mt-1 font-medium text-warning">The email to <?= e($fresh['email']) ?> was not sent<?= ($why = mail_off_reason('invitation')) !== '' ? ': ' . e(rtrim($why, '.')) . '.' : ' (the mail server refused it).' ?></p>
         <?php endif; ?>
         <p class="mt-1 text-foreground">Copy it now and send it to the person you are inviting. For security it is shown <strong>only this once</strong>; if you lose it, cancel it below and create a new one.</p>
       <?php endif; ?>
@@ -259,6 +265,17 @@ require __DIR__ . '/../src/includes/header.php';
           <?php if ($invites): ?><span class="section-count"><?= count($invites) ?></span><?php endif; ?>
         </h2>
       </header>
+      <?php if ($actAdmin && $invites): ?>
+        <nav class="filter-chips mt-4" aria-label="Filter by state">
+          <?php foreach (['' => 'All', 'active' => 'Active', 'used' => 'Used', 'expired' => 'Expired', 'cancelled' => 'Cancelled'] as $k => $label):
+              if ($k !== '' && empty($stateCounts[$k]) && $stateFilter !== $k) { continue; } ?>
+            <a href="<?= e(url_invites() . ($k !== '' ? '?state=' . $k : '')) ?>"<?= $stateFilter === $k ? ' aria-current="page"' : '' ?>><?= e($label) ?> <span class="tab-count"><?= (int)($stateCounts[$k] ?? 0) ?></span></a>
+          <?php endforeach; ?>
+        </nav>
+      <?php endif; ?>
+      <?php if ($invites && !$listed): ?>
+        <p class="py-6 text-sm text-muted-foreground-1">No <?= e($stateFilter) ?> invitations.</p>
+      <?php endif; ?>
       <?php if (!$invites): ?>
         <div class="empty mt-4">
           <h3 class="empty-title">No invitations yet</h3>
@@ -266,7 +283,7 @@ require __DIR__ . '/../src/includes/header.php';
         </div>
       <?php else: ?>
         <ul>
-          <?php foreach ($invites as $inv):
+          <?php foreach ($listed as $inv):
               $state = invite_state($inv);
               [$stateLabel, $stateClass] = $STATE[$state];
               $names = $joined[(int)$inv['id']] ?? [];

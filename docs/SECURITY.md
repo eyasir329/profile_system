@@ -1,11 +1,83 @@
 # Security
 
-How Profile System protects accounts and data, what the October 2026
-audit found and fixed, what is left, and what whoever runs the server
+How Profile System protects accounts and data, what the two October 2026
+audits found and fixed, what is left, and what whoever runs the server
 must do. For who may see and change what, see
 [`PERMISSIONS.md`](PERMISSIONS.md).
 
-## 1. Audit, October 2026
+## 1. Second audit, 20 October 2026
+
+Done twice, in two ways, after the UI refresh added the admin pages for
+activity, emails, search and site settings.
+
+1. **Black-box (outside in, before reading the code).** The running app was
+   probed like a stranger would: which paths answer, which headers come
+   back, what forms accept, how sign-in reacts to wrong passwords and
+   rotated addresses, what a signed-in student can reach. Test accounts
+   were created for this and deleted afterwards.
+2. **White-box (reading the code).** Every page and include changed since
+   the first audit, the auth and session core, the rate limiter, the
+   one-time-link pages, every query built from a variable, every
+   unescaped output, the scripts, `Dockerfile`, `compose.yml`, the
+   entrypoint, `.dockerignore` and the git history.
+
+### Black-box results
+
+| Check | Result |
+| --- | --- |
+| Hidden files: `.env`, `.git/`, `composer.json`, `src/`, `database/`, `backups/`, `*.bak`, `phpinfo.php` | Not served (404) |
+| Directory listings: `/uploads/`, `/assets/`, `/docker/` | Refused (403) |
+| Security headers | CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS over HTTPS; `TRACE` refused |
+| Session cookie | `HttpOnly`, `Secure`, `SameSite=Lax`, and `no-store` on pages |
+| POST without the CSRF token | Refused (403) |
+| Wrong email vs wrong password | Same message, same timing: no account enumeration |
+| Brute force, one request at a time, with a different `X-Forwarded-For` each | Locked after 5; the fake header is ignored |
+| Odd input (quotes, `token[]=` arrays) on reset, verify and register links | Clean "invalid link" pages, no PHP errors or stack traces |
+| `?next=` / `?redirect=` to another site | Ignored: no open redirect |
+| Student opening admin pages, the Students sheet or invitations | 403 |
+| Student asking for another person's profile (`profile.php?id=`) | Always shown their own: no IDOR |
+| **Brute force, many requests at the same moment** | **Got past the limit: finding 1 (confirmed with the white-box reading, fixed, tested)** |
+
+### What was found and fixed
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | High | **Rate limits could be raced.** Each limit was "count failures, check the password (≈70 ms of bcrypt), record the failure". Requests sent in parallel all counted *before* any failure was recorded, so "5 tries per account" allowed as many guesses as fit in one burst. The same applied to the two-factor code (5 tries per 10 minutes, which is what makes a 6-digit code safe) and to password-reset emails. | `rate_limit_lock()` (`src/includes/ratelimit.php`) takes a MariaDB `GET_LOCK` per bucket before the check, held until the request ends, so attempts on one email, account or IP run one at a time. Used by sign-in (email, then IP), `second_factor_check()` and `forgot_password.php`. A request that waits more than 10 s for the lock counts as over the limit. Tested: 12 parallel wrong passwords now give exactly 5 "Invalid" answers and 7 lock-outs. |
+| 2 | Medium | **Signing in reset the per-IP counter.** A successful sign-in cleared the IP's failed attempts, so anyone with an account could spray passwords at other accounts from one address without limit, signing into their own account every 19 tries. A successful registration cleared it too (the `ip:` bucket is shared). | Success now clears only that account's own bucket; the IP's count expires on its own (`login.php`, `register.php`). |
+| 3 | Medium | **Two-factor and backup codes could be used twice at once.** The "code already used" check and the backup-code list were read, then written. Two requests together could both pass. | The authenticator code's time step is claimed in one conditional `UPDATE`, which succeeds only once. The per-account lock (fix 1) also serialises backup-code use. Tested: the same code is accepted once, then refused. |
+| 4 | Medium | **Reset links outlived an email change.** Reset links already sent to the old address stayed valid after the email was changed, by the user or an admin. If the old mailbox is the reason for the change, it could still take the account over. | `email_change_applied()` (`src/includes/email_change.php`) marks every open reset link used. Called from `verify_email.php`, the instant change path and `admin/user.php`. |
+| 5 | Medium | **Silent email change.** When the "confirm new email" message is switched off (Emails › Settings), the change applied at once and **nobody was told**. Someone at an unlocked screen, or with a stolen session, could move the account to their address and then reset the password. | The instant path now emails the old address (`mail_email_changed`), like every other path. |
+| 6 | Medium | **The root database password was visible to PHP.** The entrypoint needs it to run migrations, but it stayed in the environment Apache inherits, so any PHP bug that reads the environment (`getenv()`, `/proc/self/environ`) exposed full database control. | With a separate app user, `docker/web-entrypoint.sh` unsets `DB_PASSWORD`, `DB_USER` and `MARIADB_ROOT_PASSWORD` before starting Apache. Checked: Apache's environment now holds only the app user's credentials. |
+| 7 | Medium | **The app's database user had `ALL PRIVILEGES`**, so an SQL injection could `DROP` or `ALTER` tables or create routines. | It now has `SELECT, INSERT, UPDATE, DELETE` only, revoked and regranted on every start, and the password follows `.env`. The app never changes the schema; migrations run as the operator user. |
+| 8 | Medium | **Database dumps and a script with real credentials were baked into the image.** `COPY . /var/www` with an incomplete `.dockerignore` copied `backups/` (full dumps: personal data) and `crud_test.sh` (a real login) into every image built. | `.dockerignore` now excludes `backups/`, dumps, spreadsheets, CSVs, both smoke/test scripts, `public/docker/` and the tunnel files. Checked in the rebuilt container. |
+| 9 | Low | **The web server could rewrite the app.** Code was owned by `www-data` in the image and bind-mounted read-write, so a bug that lets someone write a file could plant PHP in the project on the host. | Code in the image is owned by root and not writable; the bind mounts in `compose.yml` are `:ro`; only `uploads/` (its own volume, PHP disabled) is writable. |
+| 10 | Low | **Sessions never expired** while they were used, and idle ones disappeared at random (PHP's 24-minute garbage collection). A session left open on a shared lab PC, or a stolen cookie, stayed valid for ever. | `require_login()` ends a session after 2 hours without a request and 7 days after sign-in (`SESSION_IDLE_SECONDS`, `SESSION_ABSOLUTE_SECONDS` in `auth.php`); `session.gc_maxlifetime` matches. The login page explains why. |
+| 11 | Low | **Session cookie could be planted from a sibling site.** It was the default `PHPSESSID`. The quick tunnel shares `trycloudflare.com` with everyone else's tunnels, and any subdomain could set a cookie for the parent domain (cookie tossing / session fixation). | Over HTTPS the cookie is `__Host-ps_session`: browsers accept it only from this exact host, with `Secure`, `Path=/` and no `Domain`. Over plain HTTP (local) it is `ps_session`. |
+| 12 | Low | **The per-request account check failed open.** If the database errored, `require_login()` ignored the error, and a deleted or signed-out session went on with its cached roles. | It now shows the 503 page instead. |
+| 13 | Info | **Student spreadsheets in the repository.** Three `Information of Lab Students*.xlsx` files (names, IDs: personal data) were committed. | Removed from the tree in this commit. **They are still in git history**; see §4. |
+
+### Checked and found safe
+
+- **SQL**: every query built from a variable was traced. Tables, columns and
+  `IN (…)` lists come from fixed maps or are cast to integers; values are
+  bound. The new admin search and activity filters bind everything and
+  escape `LIKE` wildcards.
+- **XSS**: new admin pages print through `e()`; the editor's `innerHTML`
+  writes only server-escaped fragments; the command palette uses text
+  nodes; email HTML escapes every paragraph and link.
+- **CSV exports** (users, activity, students): cells starting with
+  `= + - @`, tab or CR are prefixed with `'`, so they can't run as Excel
+  formulas.
+- **Admin emails**: one message per person (no exposed recipients), header
+  fields go through PHPMailer, a resend repeats only admin-written emails,
+  never a reset or invitation link, and links in system emails are not
+  stored in the log.
+- **Role switch**: roles are re-read from the database; the redirect back
+  only accepts this site's own address.
+- **Site settings**: the time zone must be one from PHP's own list before
+  it is used in `SET time_zone`.
+
+## 2. First audit, October 2026
 
 The whole application was reviewed: every page in `public/`, every
 include in `src/includes/`, the JavaScript in `resources/js/`, the Apache
@@ -49,7 +121,7 @@ plain text; the two-factor step had no rate limit; admins could not reset
 two-factor; deactivated accounts were never deleted; email changes were
 not confirmed; there were no security headers.
 
-## 2. How the protections work
+## 3. How the protections work
 
 ### Accounts and sign-in
 
@@ -59,17 +131,26 @@ not confirmed; there were no security headers.
   5 failed sign-ins per email per 15 minutes and 20 per IP per 10 minutes;
   5 wrong two-factor codes per account per 10 minutes; 5 reset requests
   per IP per hour and 3 reset emails per address per hour.
+  Each check takes a lock on its bucket first (`rate_limit_lock()`), so
+  parallel requests are counted one by one. A successful sign-in clears
+  only that account's failures, never the IP's.
 - **Sessions**: HttpOnly cookie, `SameSite=Lax`, `Secure` over HTTPS
   (`COOKIE_SECURE`), strict mode, a new id at sign-in and after two-factor.
-  Every request re-checks the account: deleted, deactivated or
-  `session_epoch` changed means signed out; roles are read fresh.
-- **Two-factor**: TOTP (RFC 6238, ±30 s), each code usable once. Ten
+  The cookie is `__Host-ps_session` over HTTPS. Every request re-checks
+  the account: deleted, deactivated or `session_epoch` changed means
+  signed out; roles are read fresh; if the database can't answer, the
+  request stops (503). A session ends after 2 hours idle and 7 days after
+  sign-in.
+- **Two-factor**: TOTP (RFC 6238, ±30 s), each code usable once (claimed
+  atomically, so not even twice at the same moment). Ten
   backup codes, stored with `password_hash()`, shown once, single use; the
   owner is emailed when one is used. An admin can reset two-factor.
 - **Security emails** go to the owner when the password changes, the
   sign-in email changes (to the old address), two-factor is turned off or
   reset, a backup code is used, and the account is deactivated.
-- **Changing your own email** waits for a link sent to the new address.
+- **Changing your own email** waits for a link sent to the new address
+  (or, with that email switched off, applies at once and tells the old
+  address). Any email change ends open password-reset links.
 
 ### Requests
 
@@ -89,6 +170,10 @@ not confirmed; there were no security headers.
   `Permissions-Policy`, HSTS over HTTPS.
 - No directory listings; no scripts run from `uploads/`; `public/docker/`
   denied; Apache and PHP versions not advertised.
+- Containers: the app's database user can only read and write rows;
+  Apache's environment holds no root database password; the code is
+  read-only to the web server; the image contains no backups, test
+  scripts or spreadsheets (`.dockerignore`).
 - `robots.txt` disallows indexing.
 
 ### Data kept, and for how long (`src/includes/housekeeping.php`)
@@ -98,7 +183,7 @@ deactivated accounts 30 days after deactivation (with profile and
 activity), failed-sign-in records and their log rows after 30 days, used
 or expired one-time links after 30 days.
 
-## 3. Known limits
+## 4. Known limits
 
 - **CSP allows `'unsafe-inline'` and `'unsafe-eval'`** for scripts.
   Alpine.js's standard build evaluates `x-data` and `@click` expressions.
@@ -112,6 +197,22 @@ or expired one-time links after 30 days.
 - **Teachers may edit and delete any template or data link, and everyone
   may edit any potential journal.** This is by design (shared lists); the
   activity log and the "Updated by" line record who did what.
+- **Student spreadsheets are still in git history.** The three
+  `Information of Lab Students*.xlsx` files are deleted from the tree, but
+  every clone of the repository still holds them in earlier commits. The
+  repository is private (checked: not visible without signing in to
+  GitHub), so keep it private. To remove them for good, rewrite the
+  history (`git filter-repo --path-glob 'Information of Lab Students*.xlsx'
+  --invert-paths`), force-push, and have everyone re-clone. That rewrites
+  every commit id, so it is left to the owner to decide.
+- **`public/docker/smoke.sh` and `crud_test.sh` contain real sign-in
+  credentials** on the developer's disk. They are git-ignored, kept out of
+  the image, and `public/docker/` is denied by Apache, but the safest
+  place is outside `public/`, with the password read from an environment
+  variable.
+- **Admins can switch off security emails** (Emails › Settings), including
+  the confirmation of a new email address. That is deliberate, but every
+  switch weakens what the owner is told; leave the security ones on.
 - **First run**: while the database has no users at all, the first person
   to register becomes admin without an invitation. Create the first admin
   before the site is reachable from outside.
@@ -119,7 +220,7 @@ or expired one-time links after 30 days.
   updated, and links in emails already sent stop working. Use a named
   tunnel or a fixed domain for real use.
 
-## 4. Checklist for whoever runs it
+## 5. Checklist for whoever runs it
 
 1. `.env`: `APP_ENV=production`, `COOKIE_SECURE=1`, `TRUST_PROXY=1` and
    `WEB_BIND=127.0.0.1` when published through the tunnel, `APP_URL` set to
@@ -128,12 +229,16 @@ or expired one-time links after 30 days.
    `.env` (never committed; `.env` is git-ignored). Replace it if it is
    ever shared.
 3. Leave Adminer and Mailpit stopped unless needed (`make tools-down`).
+   `ENABLE_ADMINER=0` does not stop a container that is already running:
+   check `docker ps`.
 4. After pulling changes: `make rebuild && make up` (Apache and PHP
-   settings are baked into the image; migrations run on start).
+   settings and the entrypoint are baked into the image; migrations run
+   on start). After the 20 October 2026 audit this also narrows the app
+   database user's grants and signs everyone out once (new cookie name).
 5. Backups: `make backup` regularly; the dump contains personal data, so
    store it like the database.
 6. Watch `make logs` for `[mail] Failed`, `[housekeeping]` and PHP errors.
 
-## 5. Reporting a problem
+## 6. Reporting a problem
 
 Tell an admin of the lab. Do not post details publicly until it is fixed.

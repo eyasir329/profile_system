@@ -11,6 +11,157 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Security: second audit (black-box and white-box)
+
+Full write-up in [`docs/SECURITY.md`](docs/SECURITY.md) §1.
+
+- **Rate limits held under parallel requests.** Sign-in, two-factor and
+  password-reset checks run one at a time per email / account / IP
+  (`rate_limit_lock()`, a MariaDB `GET_LOCK`). Before, many requests sent
+  at once all passed the "5 tries" check before any failure was recorded.
+- **Signing in no longer resets the per-IP counter**, so an account holder
+  can't spray other accounts from one address by logging into their own in
+  between. Registration no longer clears it either.
+- **Two-factor codes and backup codes are strictly single use**, also when
+  two requests arrive together (atomic claim of the code's time step).
+- **An email change ends open password-reset links** (they went to the old
+  address), and a change that applies without confirmation now tells the
+  old address.
+- **Sessions end** after 2 hours without activity and 7 days after
+  sign-in. The cookie is now `__Host-ps_session` over HTTPS, so another
+  site under the same parent domain can't plant or overwrite it.
+  **Everyone is signed out once** by this change.
+- **The sign-in check fails closed**: if the database can't confirm the
+  account, the request gets the 503 page instead of carrying on.
+- **Containers**: the app's database user can only read and write rows
+  (no `DROP`/`ALTER`); the root DB password is removed from Apache's
+  environment; the code is read-only to the web server (read-only mounts,
+  root-owned files in the image); `.dockerignore` keeps `backups/`, test
+  scripts with credentials and spreadsheets out of the image.
+- Removed the three student spreadsheets (`Information of Lab Students*.xlsx`)
+  from the repository. They remain in git history: see SECURITY.md §4.
+
+### Fixed: admin search on touch screens (iPad)
+
+- Dragging in the search panel scrolled the page behind instead of the
+  results. While the panel is open the page is now pinned (the iPad-proof
+  way: position:fixed, scroll position restored on close), the result list
+  keeps its scroll to itself (overscroll-behavior), and drags outside it
+  do nothing.
+- The panel fits the visible screen, also with the on-screen keyboard up.
+  On touch screens the keyboard no longer pops up by itself; a short drag
+  through the results no longer counts as a tap.
+
+### Fixed: Google Authenticator said the setup key was invalid
+
+- Two-factor setup keys were 20 characters (one letter per random byte, so
+  100 bits: not whole bytes). Google Authenticator rejects such keys as
+  "Key value is invalid". Keys are now 20 random bytes properly
+  base32-encoded: the standard 32 characters. Checked against the RFC 6238
+  test vectors and an independent implementation.
+- A setup still waiting for its first code gets a new, standard key when
+  the page is opened. Two-factor that is already on keeps working.
+
+### Site settings: activity log clean-up (admin)
+
+- **Admin › Site settings › Activity log**: keep activity forever (the
+  default), or 30 days to 2 years; keep the IP address and browser 7 days
+  to 1 year (default 90, never longer than the event). Shows how many
+  events are stored and, before saving, how many the choice would delete.
+- Applied at once on save (after a confirmation) and then automatically by
+  housekeeping every few hours (`activity_purge()` in housekeeping.php).
+  The change is logged after the clean-up, so it is never deleted by it.
+- The Privacy page states the configured periods instead of a fixed
+  "90 days".
+
+### Admin side, reworked
+
+- **One page per user** (`/admin/user.php?id=`), laid out like My profile:
+  identity panel with a summary (last active, last sign-in, sign-ins and
+  failures in 30 days, two-factor, joined), an "On this page" menu, and
+  sections for Account, Roles, Lab details (same labels as the profile),
+  Sign-in & security, Recent activity, Emails and Remove access. A save bar
+  stays in view while editing. The old read-only view (`/admin/?id=`)
+  redirects here.
+- New on that page: **email a password reset link** (the admin never sees
+  a password) and **sign out everywhere**. Both are logged.
+- **Users list** is its own page: Active / Deactivated tabs and role chips
+  with counts, two-factor filter, sort by name / newest / recently active /
+  longest inactive, last-active and two-factor columns, **bulk email,
+  deactivate and restore** (same safety rules as one at a time), CSV
+  download.
+- **Dashboard (admin)**: health numbers, **Needs attention** (failed
+  sign-ins and emails, admins without two-factor, email off, accounts about
+  to be deleted, invitations about to expire, never signed in, time zone not
+  chosen), a 14-day activity chart, quick actions and everyone's latest
+  activity.
+- **Command palette**: Ctrl/⌘ + K (or Search in the top bar) jumps to any
+  admin page or person.
+- Invitations: state chips (Active / Used / Expired / Cancelled) for admins.
+- Navigation order: Dashboard · Users · Invitations · Emails · Activity ·
+  Site settings.
+
+### Site settings: time zone (admin)
+
+- **Admin › Site settings** chooses the time zone every time in the app is
+  shown in (activity, emails, invitations, profiles, charts, the times in
+  security emails), for everyone. A live preview, "use my computer's
+  zone", and a footer note "Times in …" for signed-in users. `APP_TIMEZONE`
+  in `.env` sets the default.
+- db.php applies it to PHP and to each database connection, so "today",
+  the day/hour charts and expiry checks all agree.
+- Migration `036`: the eleven `DATETIME` columns that hold moments
+  (expiries, `used_at`, `deleted_at`, …) are now `TIMESTAMP`, so changing
+  the zone never shifts an expiry. Existing values are converted as UTC;
+  checked unchanged.
+
+### Activity (admin)
+
+A new **Activity** tab for admins (`/admin/activity.php`):
+
+- **Timeline** of everything people do (sign-ins, failed sign-ins, profile,
+  account, resources, invitations, security and admin actions), grouped by
+  day, with repeats folded ("Switched role 4 times"). Filter by person,
+  area, period or text (name, email, IP, detail); download as CSV
+  (spreadsheet formulas neutralised; each download is itself logged).
+- **People**: everyone with last active, last sign-in, sign-ins and failed
+  sign-ins in 30 days, and where they were last seen from; sortable.
+- **One person**: summary numbers, the addresses and devices they used,
+  and their own timeline; linked from Admin › Users › Edit.
+- **Charts** (also on the Emails log): activity per day (per hour for the
+  last 24 hours), a weekday × hour heatmap, most active people / events by
+  area; each with a tooltip and a table view. Colours checked for
+  colour-blind safety in light and dark.
+- **Now also tracked:** signing out; wrong two-factor codes and the
+  lock-out; turning two-factor on or off; restoring an account from the
+  emailed link; downloading the Students sheet.
+- **Fixed:** with two-factor on, "Signed in" was logged as soon as the
+  password was right, even if the code never was. It is now logged after
+  the code ("Signed in … (with two-factor)"); the password step is its own
+  event.
+- Activity now records the **IP address, browser and acting role**
+  (migration `035`); housekeeping clears IP and browser after 90 days. The
+  Privacy page says so.
+
+### Emails (admin)
+
+A new **Emails** tab for admins (`/admin/emails.php`):
+
+- **Email log** (migration `033`): every email the app sends or tries to
+  send, with the result, the mail server's answer in plain words, timing,
+  who triggered it, and the text. Links in system emails (reset,
+  invitation, restore tokens) are stored as `[link hidden]`.
+- **Write an email**: to picked people, everyone, or a role, plus typed
+  addresses. One copy per person, `{name}` placeholder, live preview, a
+  test copy to yourself, and a confirm step. At most 100 recipients per
+  send and 200 emails per admin per hour.
+- **Settings** (migration `034`, table `app_settings`): a master switch
+  for all email, one switch per kind of email (each says what happens
+  while it is off), how long to keep the log, the mail server settings
+  read from `.env`, and a "send me a test email" check. A switched-off
+  email is logged as "Not sent". With "Confirm new email" off, an email
+  change applies at once, as when no mail server is set up.
+
 ### Security audit (October 2026)
 
 Full report: `docs/SECURITY.md`. Fixed:

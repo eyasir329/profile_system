@@ -16,6 +16,7 @@ require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/mail_templates.php';
+require_once __DIR__ . '/../src/includes/email_change.php';
 
 $token = (string)($_GET['token'] ?? '');
 $err = '';
@@ -51,6 +52,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{64}$/', $token)) {
                 ->execute(['e' => $row['new_email'], 'id' => (int)$row['user_id']]);
             $pdo->prepare('UPDATE email_verifications SET used_at = NOW() WHERE id = :id')
                 ->execute(['id' => (int)$row['id']]);
+            email_change_applied($pdo, (int)$row['user_id']);
             $pdo->commit();
             log_activity((int)$row['user_id'], 'account_update', 'email');
             if (strcasecmp((string)$row['old_email'], (string)$row['new_email']) !== 0) {

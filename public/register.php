@@ -158,9 +158,9 @@ if ($canRegister && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
             log_activity($userId, 'register', 'roles=' . implode(',', $grantRoles)
                 . ($invite ? ';invite=' . (int)$invite['id'] : ';first-run'));
-            // Successful registration: clear any earlier failed
-            // attempts from this IP so retries aren't penalised.
-            clear_attempts('ip:' . $ip);
+            // The IP's failed attempts are left to expire, not cleared: the
+            // 'ip:' bucket is shared with sign-in, so clearing it here
+            // would also wipe failed sign-ins from this address.
             header('Location: ' . url_login() . '?registered=1');
             exit;
         } catch (RuntimeException $ex) {

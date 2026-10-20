@@ -15,6 +15,12 @@
  *   - clear_attempts($bucket)
  *       Deletes every row in the bucket. Call on success.
  *
+ *   - rate_limit_lock($bucket)
+ *       Takes a database lock named after the bucket until the request
+ *       ends. Call it BEFORE too_many_attempts(): otherwise many requests
+ *       sent at the same moment all pass the check before any of them has
+ *       recorded its failure, and a "5 tries" limit allows hundreds.
+ *
  * Bucket keys are short strings, e.g. "email:foo@bar" or "ip:1.2.3.4".
  * They share the same 80-char column so keep them under that limit.
  *
@@ -82,6 +88,41 @@ function too_many_attempts(string $bucket, int $max, int $windowSeconds): bool
     } catch (Throwable $e) {
         error_log('ratelimit.too_many_attempts: ' . $e->getMessage());
         return false; // fail open — better to let some abuse through than to lock everyone out
+    }
+}
+
+/**
+ * Serialise every request that counts against $bucket: check, attempt and
+ * record then happen one request at a time. The lock is MariaDB's
+ * GET_LOCK(), held by this request's connection and released when the
+ * request ends. Take several in a fixed order (email, then IP) so two
+ * requests can never wait on each other.
+ *
+ * Returns false when the lock could not be had within $timeoutSeconds:
+ * a queue that long is itself a flood, so callers treat it as "too many
+ * attempts" (carrying on unlocked would bring the race back). A database
+ * error returns true, failing open like too_many_attempts().
+ */
+function rate_limit_lock(string $bucket, int $timeoutSeconds = 10): bool
+{
+    global $pdo;
+    if (!isset($pdo) || $bucket === '') {
+        return true;
+    }
+    try {
+        // Lock names are at most 64 characters: 'ps_rl:' + 40 hex.
+        $st = $pdo->prepare('SELECT GET_LOCK(:n, :t)');
+        $st->bindValue('n', 'ps_rl:' . sha1($bucket), PDO::PARAM_STR);
+        $st->bindValue('t', $timeoutSeconds, PDO::PARAM_INT);
+        $st->execute();
+        if ((int)$st->fetchColumn() === 1) {
+            return true;
+        }
+        error_log('ratelimit.rate_limit_lock: timed out on ' . substr($bucket, 0, 40));
+        return false;
+    } catch (Throwable $e) {
+        error_log('ratelimit.rate_limit_lock: ' . $e->getMessage());
+        return true;
     }
 }
 

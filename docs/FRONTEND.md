@@ -55,7 +55,10 @@ resources/
 │       ├── navigation.css .navbar .menu .side-nav .segmented .site-footer
 │       ├── data.css       .avatar .person .toolbar .table .sheet .facts .copy-box .steps
 │       ├── overlay.css    .modal .toast
-│       └── profile.css    .identity .completion .value-card .inline-form
+│       ├── profile.css    .identity .completion .value-card .inline-form
+│       ├── mail.css       .stat-strip .pick .chip .mail-preview (Admin › Emails)
+│       ├── chart.css      .chart .chart-col .heat .bars .chart-tip (charts.php)
+│       └── admin.css      .user-summary .save-bar .bulk-bar .attention .palette
 ├── js/
 │   ├── app.js             entry: starts Alpine, flash toasts, first-error focus
 │   ├── ui.js              Alpine stores, directives, components
@@ -129,6 +132,7 @@ ever has to HTML-escape, never JS-escape.
 | `x-confirm` | `<form>` | Asks before submitting. `data-confirm-title`, `-body`, `-ok`, `-cancel`, `-tone="primary"` |
 | `x-copy` | `<button data-copy="...">` | Copies the value and shows a toast |
 | `x-autosubmit` | filter `<form>` | Submits when a `<select>` changes |
+| `x-chart` | `<figure class="chart">` | Tooltip for marks with `data-tip` JSON, on hover and keyboard focus (built with `textContent`) |
 
 ### Components (`x-data="..."`)
 
@@ -140,6 +144,11 @@ ever has to HTML-escape, never JS-escape.
 | `passwordForm` | Settings → Security: live length and match hints |
 | `sheet` | Full-screen mode of the directory's wide table (remembered per tab) |
 | `confirmDialog` | The `<dialog>` in `footer.php` |
+| `sectionNav` | Admin › one user: "On this page" follows the section in view; holds `student` (shows Lab details) |
+| `bulkSelect` | Admin › Users: ticked rows, select all, the bulk bar and its Email link (`data-compose`) |
+| `palette` | Admin command palette: pages from `data-palette`, people from `/admin/search.php` |
+| `tzPicker` | Admin › Site settings: live preview of the chosen time zone, "use my computer's zone" |
+| `emailComposer` | Admin › Emails › Write an email: people search and picker, live recipient count and preview, `{name}` button, confirm before a real send |
 
 One-line state is written inline, for example the password toggle
 (`x-data="{ show: false }"`) and the mobile drawer.

@@ -37,7 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // link is single-use, but without throttling an attacker can spam
     // the table and / or mail a target user into inbox fatigue.
     $ip = client_ip();
-    if (too_many_attempts('ip:' . $ip, 5, 3600)) {
+    // One request at a time per IP and per address (rate_limit_lock()), so
+    // parallel requests can't all pass the checks below before any counts.
+    if (!rate_limit_lock('ip:' . $ip) || too_many_attempts('ip:' . $ip, 5, 3600)) {
         $errors['email'] = 'Too many requests from your network. Please try again in an hour.';
         log_activity(null, 'forgot_password_throttled', 'ip=' . $ip);
     } else {
@@ -49,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // so nobody can flood one person's inbox. The page still says the
         // same thing either way.
         $mailBucket = 'reset:' . strtolower((string)$email);
-        $mailCapped = !$errors && too_many_attempts($mailBucket, 3, 3600);
+        $mailCapped = !$errors && (!rate_limit_lock($mailBucket) || too_many_attempts($mailBucket, 3, 3600));
         if (!$errors && !$mailCapped) {
             record_attempt($mailBucket, null, $ip, (string)$email, true);
         }
@@ -67,17 +69,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $expiresAt = (new DateTimeImmutable('+30 minutes'))->format('Y-m-d H:i:s');
                 $ins = $pdo->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (:u, :t, :e)');
                 $ins->execute(['u' => (int)$u['id'], 't' => $tokenHash, 'e' => $expiresAt]);
-                // Email the link. Only without email set up, and never in
+                // Email the link. Only without email (not set up, or reset
+                // emails switched off in Emails › Settings), and never in
                 // production, is it shown on screen instead: the banner
                 // would otherwise hand a working reset link to whoever
                 // typed the address.
                 $isDev = getenv('APP_ENV') !== 'production';
-                if (mail_enabled()) {
+                $canMail = mail_type_enabled('password_reset');
+                if ($canMail) {
                     mail_password_reset($email, (string)$u['name'], $rawToken);
                 } elseif ($isDev) {
                     $devTokenInfo = ['user_id' => (int)$u['id'], 'name' => $u['name'], 'token' => $rawToken];
                 }
-                log_activity((int)$u['id'], 'password_reset_requested', mail_enabled() ? 'mail' : ($isDev ? 'dev=1' : 'dev=0'));
+                log_activity((int)$u['id'], 'password_reset_requested', $canMail ? 'mail' : ($isDev ? 'dev=1' : 'dev=0'));
             } else {
                 // No matching email: still record the attempt so the
                 // limiter accumulates for unknown-address probes too.
