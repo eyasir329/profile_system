@@ -47,6 +47,8 @@ require_once __DIR__ . '/../src/includes/validate.php';
 require_once __DIR__ . '/../src/includes/lab_fields.php';
 require_once __DIR__ . '/../src/includes/lab_entries.php';
 require_once __DIR__ . '/../src/includes/ui.php';
+require_once __DIR__ . '/../src/includes/mail_templates.php';
+require_once __DIR__ . '/../src/includes/email_change.php';
 require_login();
 
 $userId    = (int)current_user_id();
@@ -113,9 +115,6 @@ if (!$isStudent) {
             <span><?= e((string)($acc['email'] ?? '')) ?></span>
             <?= ui_roles(array_values(array_intersect(['admin', 'teacher', 'student'], current_user_roles()))) ?>
           </p>
-          <div class="identity-actions">
-            <a class="btn btn-secondary btn-sm" href="<?= e(url_settings()) ?>"><?= pf_icon('settings') ?> Account settings</a>
-          </div>
         </div>
       </header>
       <p class="max-w-prose text-muted-foreground-2">
@@ -197,9 +196,6 @@ require __DIR__ . '/../src/includes/header.php';
         <span class="badge" data-echo="course"<?= $labValues['course'] === '' ? ' hidden' : '' ?>><?= e($labValues['course']) ?></span>
         <span data-echo="student_id"<?= $labValues['student_id'] === '' ? ' hidden' : '' ?>><?= $labValues['student_id'] !== '' ? 'ID ' . e($labValues['student_id']) : '' ?></span>
       </p>
-      <div class="identity-actions">
-        <a class="btn btn-ghost btn-sm -ml-3" href="<?= e(url_settings()) ?>"><?= pf_icon('settings') ?> Account settings</a>
-      </div>
     </div>
 
     <div class="completion" data-completion>
@@ -748,8 +744,20 @@ function op_update_lab(PDO $pdo, int $userId): void
         $taken = $pdo->prepare('SELECT 1 FROM users WHERE email = :e AND id <> :u');
         $taken->execute(['e' => $value, 'u' => $userId]);
         if ($taken->fetch()) { $fail('That email is already in use.'); return; }
-        $pdo->prepare('UPDATE users SET email = :e WHERE id = :u')->execute(['e' => $value, 'u' => $userId]);
-        log_activity($userId, 'account_update', 'email');
+        $old = $pdo->prepare('SELECT name, email FROM users WHERE id = :u');
+        $old->execute(['u' => $userId]);
+        $old = $old->fetch();
+        if ($old && strcasecmp((string)$old['email'], $value) !== 0) {
+            // Waits for confirmation from the new address when email is set up.
+            $result = request_email_change($pdo, $userId, (string)$old['name'], $value);
+            if ($result === 'failed') { $fail('We couldn’t send the confirmation email, so the address was not changed. Try again later.'); return; }
+            if ($result === 'sent') {
+                $state = profile_state($pdo, $userId);
+                op_json_ok(['value' => (string)$old['email'], 'filled' => $state['filled'], 'total' => $state['total'], 'state' => $state,
+                    'notice' => 'Check ' . $value . ': open the link we sent to confirm the change. Until then your current address stays.']);
+                return;
+            }
+        }
     } else {
         if ($field === 'student_id' && ($problem = student_id_problem($pdo, $value, $userId)) !== '') { $fail($problem); return; }
         // $field is a key of lab_field_defs(), never raw input.

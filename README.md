@@ -14,20 +14,20 @@ committed, so running it needs no Node toolchain.
 
 | Role | Can |
 | --- | --- |
-| **Student** | Fill in and edit their own lab details in place (course, student ID, names, email, research title, enrolment year and month, next step, previous university). Add completed theses, journal and conference papers, and publications and awards as separate entries. Mark their current course completed, then add the next one (one course at a time). Read the lab's resources and take potential journals. |
-| **Teacher** | Read every active student's details in one searchable sheet laid out like the workbook, with a Current students tab and a Completed tab (one fixed row per completed course). Open one student. Keep the lab's Templates, Open data and code, and Potential journals; read everyone's publications and awards. Invite new students by link. |
-| **Admin** | Create, edit, deactivate, restore and delete accounts; assign roles; edit every lab field; keep the lab resources; invite people with any role. |
+| **Student** | Fill in and edit their own lab details in place (course, student ID, names, email, research title, enrolment year and month, next step, previous university). Add completed theses, journal and conference papers, and publications and awards as separate entries. Mark their current course completed, then add the next one (one course at a time). Read the lab's resources, and add, edit and delete potential journals (a shared list). |
+| **Teacher** | Read every active student's details in one searchable sheet laid out like the workbook, with a Current students tab and a Completed tab (one fixed row per completed course). Open one student. Keep the lab's Templates and Open data and code; add, edit and delete potential journals like everyone; read everyone's publications and awards. Invite new students by link. |
+| **Admin** | Create, edit, deactivate, restore and delete accounts; assign roles; edit every lab field; invite people with any role. Account management only: no Students sheet and no Resources (an admin who also teaches switches to Teacher). |
 
 Each role sees only what it works with: students get their profile and
 Resources, teachers get the Students sheet, Resources and invitations,
-admins get Users, Resources and invitations. Lab details belong to
+admins get Users and invitations. Lab details belong to
 students; teacher and admin accounts have none. What a user may do
 follows the role they are **acting as**.
 
 **Resources** (`/resources.php`) is shared by the whole lab, one tab per
 workbook sheet: Templates and Open data and code (kept by teachers,
-read-only for students); Potential journals (teachers list them, students
-take or release them and mark their own submission published); and PublishedJournals, Conf.Proceedings,
+read-only for students); Potential journals (one shared list everyone in
+the lab adds to, edits and deletes); and PublishedJournals, Conf.Proceedings,
 Conf.PresentationOnly and Awards (everyone's rows, read-only here;
 students edit their own on My profile).
 
@@ -100,15 +100,18 @@ internet: it covers the settings in `.env` that must change first.
 | URL | Who | What |
 | --- | --- | --- |
 | `/` | anyone | What the system is |
+| `/about.php`, `/help.php`, `/privacy.php` | anyone | About the system; answers to common questions; what is stored and who sees it. Linked from the footer |
+| (email) | – | Sent by `src/includes/mail_templates.php`: invitation (when it is for one address), password reset, and notices after a password change, a sign-in email change (to the old address), two-factor turned off, and deactivation (with a 30-day restore link). Try them locally with `make mail` (Mailpit inbox at http://localhost:8025) |
+| `/error.php` | anyone | The error page Apache uses for unknown URLs and denied paths (`?code=` to preview one). PHP errors use the same page via `src/includes/error_page.php` |
 | `/login.php`, `/login_totp.php` | anyone | Sign in, role choice, 2FA code |
 | `/register.php?invite=…` | invited | Create an account |
 | `/forgot_password.php`, `/reset_password.php` | anyone | Password reset |
 | `/dashboard.php` | signed in | One panel per role (own lab details and shortcuts / the students / account counts), account summary, recent activity |
 | `/profile.php` | student | Own lab details, entries (theses, papers, publications, awards) and courses, edited in place. Others see only their name, email and roles |
-| `/resources.php` | signed in | Lab resources, one tab per sheet; `?tab=` followed by `templates`, `data`, `journals`, `pub_journals`, `pub_proceedings`, `pub_presentations` or `awards`. Teachers and admins edit the first three; students take journals |
+| `/resources.php` | signed in | Lab resources, one tab per sheet; `?tab=` followed by `templates`, `data`, `journals`, `pub_journals`, `pub_proceedings`, `pub_presentations` or `awards`. Students and teachers only (admins get a 403 page). Teachers edit Templates and Open data and code; everyone edits Potential journals |
 | `/settings.php` | signed in | Name, email, theme, password, 2FA, deactivate |
 | `/students.php` | teacher | The Students sheet: Current students and Completed tabs (`?group=completed`), filter by course (`?course=D3`, `?course=none`), search, full screen, and **Download CSV** of what is shown (`?export=csv`, the workbook's headers, opens in Excel). Course, Student ID and both names stay frozen at the left while scrolling sideways. `?id=` for one student |
-| `/admin/index.php` | admin | Users: everyone as a list, students as the sheet (`?view=sheet`), one user (`?id=`) |
+| `/admin/index.php` | admin | Users: every account with roles, status and joined date, filter by role and status; one user (`?id=`) |
 | `/admin/user.php` | admin | Create or edit a user |
 | `/invites.php` | teacher, admin | Create and cancel invitation links |
 
@@ -144,7 +147,7 @@ docs/                DESIGN, COMPONENTS, FRONTEND, PERMISSIONS, TUNNEL
 | `lab_publications` | Published journals, conference proceedings and presentations (three `kind`s), one row each |
 | `lab_awards` | Awards, one row each |
 | `lab_templates`, `lab_resources` | Shared templates, and shared open data and code links (teachers edit) |
-| `lab_journals`, `lab_journal_takers` | Potential journals (name, link, IF, CS, APC, suggested by) and the students who took each, with whether their submission is published |
+| `lab_journals` | Potential journals: name, link, IF, CS, APC, suggested by, submitted by, published (one shared list) |
 | `invites` | Invitation links (hashed token, roles, uses, expiry) |
 | `two_factor` | TOTP secret and backup codes |
 | `password_resets`, `email_verifications`, `account_restorations` | One-time tokens |
@@ -159,12 +162,13 @@ older profile sections, contact fields, photo and profile type;
 university email; `021` added the course history; `022` added "Other" as
 an enrolment month; `023` the thesis and paper entries; `024` publications
 and awards; `025` templates and open data and code; `026` and `027` course
-completion and its saved copy; `028`, `029` and `030` potential journals (`030` gives them the sheet's columns).
+completion and its saved copy; `028` to `031` potential journals (`030` gives them the sheet's columns, `031` makes them a shared list and drops `lab_journal_takers`).
 
 ## Documentation
 
 | Doc | Covers |
 | --- | --- |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | The October 2026 security audit, how sign-in, sessions and data are protected, known limits, and the checklist for running it |
 | [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | Who can create, read, update and delete what, and where it is enforced |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Stack decisions, design tokens, layout and behaviour rules |
 | [`docs/COMPONENTS.md`](docs/COMPONENTS.md) | Every component class and PHP helper, with markup |
@@ -174,16 +178,41 @@ completion and its saved copy; `028`, `029` and `030` potential journals (`030` 
 
 ## Security notes
 
+The full picture is in [`docs/SECURITY.md`](docs/SECURITY.md). In short:
+
 - Secrets live in `.env`, which is not committed. `.env.example` holds
   placeholders only.
-- Set `APP_ENV=production` before any public exposure. **The app sends no
-  email.** A password-reset request stores a one-time link but, in
-  production, it is not shown or sent anywhere (in development it is
-  shown on screen). Until email is set up, an admin recovers an account
-  by setting a new password on the user's page (Users, then Edit).
-- No `Content-Security-Policy` header is sent yet.
+- Set `APP_ENV=production` before any public exposure.
+- **Email** is sent over SMTP (PHPMailer, in `src/vendor`) once
+  `MAIL_HOST` and `MAIL_FROM_ADDRESS` are set; see the Email section of
+  `.env.example`. Production also needs `APP_URL`: links in emails are
+  built only from it, never from the request's Host header, so a forged
+  host cannot turn a reset email into a link to another site. Without
+  email, development shows reset links on screen; production shows them
+  nowhere, and an admin recovers an account by setting a new password
+  (Users, then Edit).
+- Security headers are set in `docker/apache/app.conf`: a
+  `Content-Security-Policy` (scripts, styles, fonts, images only from
+  this site; no framing), `Referrer-Policy: same-origin` (reset, invite
+  and restore links carry tokens), `X-Content-Type-Options`,
+  `X-Frame-Options` and `Permissions-Policy`. The policy still allows
+  `'unsafe-inline'` and `'unsafe-eval'` for Alpine.js; switching to
+  Alpine's CSP build would let them go.
+- Backup codes are stored hashed and work once; the two-factor step
+  allows 5 wrong codes per 10 minutes. Admins can reset two-factor.
+- Deactivated accounts are deleted 30 days later and failed sign-in
+  records after 30 days (`src/includes/housekeeping.php`, every 6 hours
+  from a page load, or `make purge`).
 - Nothing under `public/` should be a script that changes data without
   signing in. Keep test and seed scripts outside the web root.
+  The seed script now lives in `docker/`; Apache still denies
+  `public/docker/` (a local, git-ignored `smoke.sh` copy may sit there).
+- `.htaccess` files are **not read** (the base image has
+  `AllowOverride None`). Apache rules live in `docker/apache/app.conf`
+  (error pages, no directory listings, no code in `uploads/`, no version
+  header) and PHP settings in `docker/php/app.ini` (errors logged to
+  `make logs`, never shown in the page). Both are baked into the image:
+  run `make rebuild && make up` after changing them.
 
 ## License
 

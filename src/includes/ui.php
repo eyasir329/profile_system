@@ -190,6 +190,7 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
             return ['trash', 'Deleted a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
         case 'resources_update':
             if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to lab resources']; }
+            // Taking journals was removed (migration 031); older log rows still use these.
             if ($detail === 'take_journal')    { return ['check', 'Took a potential journal']; }
             if ($detail === 'release_journal') { return ['edit', 'Released a potential journal']; }
             if ($detail === 'publish_journal')   { return ['check', 'Marked a journal submission as published']; }
@@ -199,6 +200,18 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
             return ['edit', $verb . ' ' . $what . ' in lab resources'];
         case 'role_change':
             return ['shield', 'Your role was changed' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'backup_code_used':
+            return ['shield', 'Signed in with a backup code'];
+        case 'backup_codes_regenerated':
+            return ['shield', 'Made new backup codes'];
+        case 'two_factor_reset':
+            return ['shield', 'Two-factor sign-in was reset by an admin'];
+        case 'admin_2fa_reset':
+            return ['shield', 'Reset two-factor for a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'email_change_requested':
+            return ['mail', 'Asked to change your sign-in email'];
+        case 'login_failed':
+            return ['lock', $count > 1 ? $count . ' failed sign-in attempts' : 'Failed sign-in attempt'];
     }
     return ['dot', ucfirst(str_replace('_', ' ', $kind))];
 }

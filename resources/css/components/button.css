@@ -6,7 +6,7 @@
  */
 @layer components {
   .btn {
-    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-transparent px-4 text-sm font-medium whitespace-nowrap no-underline select-none;
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-transparent px-4 text-sm font-semibold whitespace-nowrap no-underline select-none;
     transition: background-color 120ms, border-color 120ms, color 120ms;
   }
   .btn:disabled,
@@ -20,15 +20,21 @@
     @apply -mx-0.5;
   }
 
+  /* Buttons carry a shadow and a 3:1 edge, so they never read as a flat card or as text. */
   .btn-primary {
     @apply bg-primary text-primary-foreground hover:bg-primary-hover;
+    box-shadow: 0 1px 2px oklch(0.2 0.05 260 / 0.25), inset 0 1px 0 oklch(1 0 0 / 0.12);
   }
   .btn-secondary {
-    @apply border-layer-line bg-layer text-foreground hover:bg-layer-hover;
-    border-color: var(--color-line-3);
+    @apply bg-layer text-foreground hover:bg-muted;
+    border-color: var(--control-line);
+    box-shadow: 0 1px 1px oklch(0.2 0.01 60 / 0.08);
   }
-  .dark .btn-secondary {
-    border-color: var(--color-gray-700);
+  .btn-secondary:hover {
+    @apply border-primary text-primary;
+  }
+  .dark .btn-secondary:hover {
+    @apply text-foreground;
   }
   .btn-ghost {
     @apply text-muted-foreground-2 hover:bg-muted-hover hover:text-foreground;

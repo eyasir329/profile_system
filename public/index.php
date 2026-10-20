@@ -18,6 +18,15 @@ if (is_logged_in()) {
     exit;
 }
 
+// After deactivating (settings.php): say what happens next.
+$flash = [];
+if (isset($_GET['deactivated'])) {
+    $flash[] = ['type' => 'success', 'title' => 'Your account is deactivated', 'duration' => 0,
+        'body' => $_GET['deactivated'] === '1'
+            ? 'We’ve emailed you a link to restore it within 30 days.'
+            : 'To restore it within the next 30 days, ask an admin of your lab.'];
+}
+
 $page_title = 'Welcome';
 $page_id    = 'home';
 require __DIR__ . '/../src/includes/header.php';

@@ -32,7 +32,16 @@
     @apply block truncate text-sm font-normal text-muted-foreground-1;
   }
 
-  /* ---- Toolbar: the filter row above a table ---- */
+  /* ---- Toolbar: the filter row above a table ----
+   * A tinted strip of its own, so search, filters and export read as tools
+   * and stay apart from the data they act on. Sheet toolbars share it.
+   */
+  .toolbar,
+  .sheet-tools {
+    @apply rounded-lg border p-3;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
   .toolbar {
     @apply mb-4 flex flex-wrap items-center gap-2;
   }
@@ -55,6 +64,7 @@
   /* ---- Table ---- */
   .table-wrap {
     @apply overflow-hidden rounded-lg border border-card-line bg-card;
+    box-shadow: var(--panel-shadow);
   }
   .table-scroll {
     @apply overflow-x-auto;
@@ -66,8 +76,11 @@
   .table td {
     @apply border-b border-table-line px-4 py-3 align-middle;
   }
+  /* Header row: its own colour and a heavier rule, so it never reads as data. */
   .table thead th {
-    @apply bg-muted py-2.5 text-sm font-bold whitespace-nowrap text-foreground;
+    @apply py-3 text-sm font-bold whitespace-nowrap text-foreground;
+    background: var(--table-head);
+    border-bottom: 2px solid var(--tools-line);
   }
   .table tbody th {
     @apply font-normal;
@@ -119,7 +132,9 @@
     @apply fixed inset-0 z-[60] flex flex-col rounded-none border-0;
   }
   .sheet-bar {
-    @apply hidden items-center gap-3 border-b border-layer-line px-4 py-2.5 text-sm;
+    @apply hidden items-center gap-3 border-b px-4 py-2.5 text-sm;
+    background: var(--tools);
+    border-color: var(--tools-line);
   }
   .sheet-frame.is-full .sheet-bar {
     @apply flex;
@@ -152,7 +167,8 @@
     box-shadow: 1px 0 0 var(--table-line);
   }
   .sheet thead .pin {
-    @apply z-20 bg-muted;
+    @apply z-20;
+    background: var(--table-head);
   }
   /* A last column that stays at the right edge (row actions), so it is
      never hidden when the sheet is wider than the page. Opaque like .pin. */
@@ -161,7 +177,8 @@
     box-shadow: -1px 0 0 var(--table-line);
   }
   .sheet thead .pin-end {
-    @apply z-20 bg-muted;
+    @apply z-20;
+    background: var(--table-head);
   }
   .sheet tbody tr:hover .pin-end {
     @apply bg-layer-hover;
@@ -174,7 +191,7 @@
      The tints are opaque: the pinned first column sticks over scrolled cells.
      Later rules win over earlier ones: stripe < your row < hover. */
   .sheet {
-    --stripe: color-mix(in oklch, var(--primary) 8%, var(--card));
+    --stripe: color-mix(in oklch, var(--primary) 5%, var(--card));
     --mine: color-mix(in oklch, var(--primary) 15%, var(--card));
     --mine-alt: color-mix(in oklch, var(--primary) 24%, var(--card));
   }
@@ -205,10 +222,10 @@
   }
   /* Sheet tabs: the workbook's sheets, above the sheet table. */
   .sheet-tabs {
-    @apply mb-3 flex gap-1 overflow-x-auto border-b border-layer-line;
+    @apply mb-3 flex gap-1 overflow-x-auto border-b-2 border-layer-line;
   }
   .sheet-tabs a {
-    @apply -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground-2 no-underline hover:text-foreground;
+    @apply -mb-0.5 border-b-[3px] border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground-2 no-underline hover:text-foreground;
   }
   .sheet-tabs a[aria-current="page"] {
     @apply border-primary text-foreground;
@@ -218,7 +235,8 @@
     @apply flex-wrap gap-2 overflow-visible border-b-0 pb-1;
   }
   .sheet-tabs.is-wrap a {
-    @apply mb-0 rounded-full border border-layer-line bg-card px-3.5 py-1.5;
+    @apply mb-0 rounded-full border bg-card px-3.5 py-1.5;
+    border-color: var(--control-line);
   }
   .sheet-tabs.is-wrap a[aria-current="page"] {
     @apply border-primary bg-primary text-primary-foreground;
@@ -227,21 +245,86 @@
     @apply bg-white/20 text-primary-foreground;
   }
   /* In the full-screen bar: same tabs, no rule underneath. */
+  /* In the full-screen bar: compact tabs, the selected one raised like .view-tabs. */
   .sheet-tabs.is-compact {
-    @apply mb-0 min-w-0 border-b-0;
+    @apply mb-0 min-w-0 gap-1 border-b-0;
+    scrollbar-width: none;
   }
   .sheet-tabs.is-compact a {
-    @apply -my-2.5 py-2.5;
+    @apply my-0 rounded-md border border-transparent px-3 py-1.5;
   }
+  .sheet-tabs.is-compact a:hover {
+    @apply bg-card;
+  }
+  .sheet-tabs.is-compact a[aria-current="page"] {
+    @apply bg-card text-primary;
+    border-color: var(--tools-line);
+    box-shadow: 0 1px 2px oklch(0.2 0.05 260 / 0.14), inset 0 -2px 0 var(--primary);
+  }
+  .sheet-tabs.is-compact a[aria-current="page"] .tab-count {
+    @apply bg-primary text-primary-foreground;
+  }
+  .sheet-bar > .faint {
+    @apply shrink-0 border-l pl-3 whitespace-nowrap;
+    border-color: var(--tools-line);
+  }
+  /*
+   * View tabs: two or three views of the same list (Students: current /
+   * completed). A segmented control on the tool tint; the selected view is
+   * a raised white tab with a blue count, so which group you are looking
+   * at is never in doubt.
+   */
+  .view-tabs {
+    @apply mb-4 flex w-full gap-1 rounded-lg border p-1 sm:inline-flex sm:w-auto;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  .view-tabs a {
+    @apply flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-md border border-transparent px-2.5 text-sm font-semibold whitespace-nowrap text-muted-foreground-2 no-underline sm:flex-none sm:px-4;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+  }
+  .view-tabs a:hover {
+    @apply bg-card text-foreground;
+  }
+  .view-tabs a[aria-current="page"] {
+    @apply bg-card text-primary;
+    border-color: var(--tools-line);
+    box-shadow: 0 1px 2px oklch(0.2 0.05 260 / 0.14), inset 0 -2px 0 var(--primary);
+  }
+  .view-tabs-count {
+    @apply min-w-6 rounded-full px-1.5 text-center text-xs leading-5 font-bold tabular-nums;
+    background: color-mix(in oklch, var(--foreground) 10%, transparent);
+  }
+  .view-tabs a[aria-current="page"] .view-tabs-count {
+    @apply bg-primary text-primary-foreground;
+  }
+  /* In the full-screen bar: same control, a size smaller. */
+  .view-tabs.is-compact {
+    @apply mb-0 w-auto min-w-0;
+  }
+  .view-tabs.is-compact a {
+    @apply h-8 px-3;
+  }
+
   /* Tabs in labelled groups (Resources: shared by teachers / lab publications). */
+  /* One compact panel; each group is a row with its label beside the pills. */
   .tab-groups {
-    @apply mb-6 flex flex-wrap gap-x-10 gap-y-4;
+    @apply mb-5 divide-y rounded-lg border px-3;
+    background: var(--tools);
+    border-color: var(--tools-line);
+    --tw-divide-opacity: 1;
+  }
+  .tab-groups > * {
+    border-color: var(--tools-line);
+  }
+  .tab-group {
+    @apply flex flex-col gap-1.5 py-2.5 sm:flex-row sm:items-center sm:gap-4;
   }
   .tab-group-label {
-    @apply mb-2 text-xs font-bold tracking-wider text-muted-foreground-1 uppercase;
+    @apply shrink-0 text-xs font-bold tracking-wider text-muted-foreground-2 uppercase sm:w-40;
   }
   .tab-groups .sheet-tabs {
-    @apply mb-0;
+    @apply mb-0 pb-0;
   }
 
   /* A sheet's own toolbar (filter box, "Only mine", row count). */
@@ -266,7 +349,8 @@
     @apply mr-1 text-sm font-semibold text-muted-foreground-2;
   }
   .filter-chips a {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-layer-line bg-card px-3 py-1 text-sm font-medium text-muted-foreground-2 no-underline hover:border-primary hover:text-foreground;
+    @apply inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-sm font-semibold text-muted-foreground-2 no-underline hover:border-primary hover:text-foreground;
+    border-color: var(--control-line);
   }
   .filter-chips a[aria-current="page"] {
     @apply border-primary bg-primary text-primary-foreground;
@@ -294,7 +378,7 @@
     }
     .sheet thead .freeze {
       z-index: 20;
-      @apply bg-muted;
+      background: var(--table-head);
     }
     /* --fz1..4: left offsets measured by the sheet component (ui.js). */
     .sheet .freeze-1 { left: var(--fz1, 0); --fw: 5.5rem; }

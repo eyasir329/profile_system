@@ -61,7 +61,9 @@ $displayOrder  = ['admin', 'teacher', 'student'];
  * Each role sees only what it works with:
  *   student  Dashboard, My profile (their lab details), Resources (read-only)
  *   teacher  Dashboard, Students (the sheet), Resources (edit), Invitations
- *   admin    Dashboard, Users, Resources (edit), Invitations
+ *   admin    Dashboard, Users, Invitations: account management only.
+ *            The Students sheet and Resources are teachers' work; an
+ *            admin who also teaches switches to Teacher for them.
  * Settings and Log out live in the account menu at the right end of the
  * bar, along with "My profile": lab details while acting as a student,
  * a plain account page (no lab details) while acting as teacher or admin.
@@ -81,7 +83,6 @@ $NAV_ITEMS_BY_ROLE = [
     'admin' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
         ['href' => 'admin',       'label' => 'Users',       'page' => 'admin'],
-        ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
         ['href' => 'invites',     'label' => 'Invitations', 'page' => 'invites'],
     ],
 ];
@@ -242,7 +243,9 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
         <div class="menu" role="menu" aria-label="Account" x-ref="menu" x-show="open" x-cloak x-transition.opacity.duration.100ms
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)">
           <p class="menu-label truncate"><?= e($myName) ?></p>
-          <a class="menu-item" role="menuitem" href="<?= e(url_profile()) ?>"><?= pf_icon('user') ?> My profile</a>
+          <?php if ($activeRole !== 'student'): ?>
+            <a class="menu-item" role="menuitem" href="<?= e(url_profile()) ?>"><?= pf_icon('user') ?> My profile</a>
+          <?php endif; ?>
           <a class="menu-item" role="menuitem" href="<?= e(url_settings()) ?>"><?= pf_icon('settings') ?> Settings</a>
           <div class="menu-sep" role="separator"></div>
           <form method="post" action="<?= e(url_logout()) ?>">

@@ -220,10 +220,23 @@ tools: require-docker ## Start the dev-only services (Adminer) on the "tools" pr
 	docker compose --profile tools up -d adminer
 	@printf "\n\033[1;32m✔ Adminer:\033[0m \033[1mhttp://localhost:$${ADMINER_PORT:-8081}/\033[0m\n\n"
 
+.PHONY: purge
+purge: require-docker ## Delete deactivated accounts past their 30 days and old sign-in records now (also runs on its own every 6 h).
+	$(call banner,Housekeeping)
+	docker compose exec -T web php /var/www/src/cli/housekeeping.php
+
+.PHONY: mail
+mail: require-docker ## Start Mailpit, a fake mail server that catches every email (inbox: http://localhost:8025).
+	$(call banner,Starting Mailpit)
+	docker compose --profile tools up -d mailpit
+	@printf "\n\033[1;32m✔ Mailpit inbox:\033[0m \033[1mhttp://localhost:$${MAILPIT_PORT:-8025}/\033[0m\n"
+	@printf "  In .env: MAIL_HOST=mailpit MAIL_PORT=1025 MAIL_ENCRYPTION=none MAIL_FROM_ADDRESS=noreply@example.test\n"
+	@printf "  then: docker compose up -d web\n\n"
+
 .PHONY: tools-down
 tools-down: require-docker ## Stop the dev-only services.
 	$(call banner,Stopping dev tools)
-	docker compose --profile tools stop adminer
+	docker compose --profile tools stop adminer mailpit
 	docker compose --profile tools rm -f adminer
 
 # ---- Cloudflare tunnel -----------------------------------------------------

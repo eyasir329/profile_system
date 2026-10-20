@@ -11,6 +11,162 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Security audit (October 2026)
+
+Full report: `docs/SECURITY.md`. Fixed:
+
+- **Per-IP limits could be dodged** behind the tunnel: the client address
+  came from the visitor-written end of `X-Forwarded-For`. Now
+  `CF-Connecting-IP`, else the rightmost entry; and `WEB_BIND=127.0.0.1`
+  (new, in `compose.yml` / `.env.example`) stops anyone on the network
+  from skipping the tunnel.
+- **Other sessions now end** when the password is changed or reset or an
+  admin resets two-factor (`users.session_epoch`, migration `032`), and a
+  deleted account's session ends.
+- **A revoked role stops working at once**: roles are re-read from the
+  database on every request.
+- **Adminer and Mailpit** listen on 127.0.0.1 only.
+- **At most 3 password-reset emails per address per hour.**
+- **Sign-in takes the same time for unknown emails** (no account
+  enumeration by timing).
+- **An authenticator code works once**, and the session id is renewed
+  after two-factor.
+- **HSTS** on HTTPS responses.
+- **Failed-sign-in log rows** are deleted after 30 days, as `/privacy.php`
+  says.
+
+### Closing the gaps: backup codes, admin 2FA reset, email confirmation, deletion after 30 days, security headers
+
+- **Backup codes work.** The two-factor step accepts a backup code
+  (single use; the owner is emailed how many are left). Codes are now
+  stored hashed and shown once, when made; Settings → Security shows how
+  many are left and can **make new backup codes**. Older plain-text lists
+  keep working until replaced.
+- **The two-factor step is rate-limited:** 5 wrong codes per 10 minutes
+  per account (it had no limit, so codes could be guessed).
+- **Admins can reset two-factor** (Users → Edit → Sign-in) for someone
+  who lost their phone and backup codes; the person is emailed.
+- **Changing your own sign-in email is confirmed**: with email set up,
+  the change waits for a link sent to the new address (24 hours), then
+  the old address is told (`src/includes/email_change.php`,
+  `verify_email.php`, which was unused before). Admin changes still apply
+  directly.
+- **Deactivated accounts are deleted after 30 days**, as Settings
+  promised (nothing did it before), together with their activity log.
+  Failed sign-in records and used one-time links are deleted after 30
+  days. Runs on its own every 6 hours; `make purge` runs it now. Admin
+  "Delete user" now also removes the activity log, and the first run
+  removed 395 log rows left behind by 145 earlier deletions.
+- **Security headers** in `docker/apache/app.conf`: Content-Security-
+  Policy, Referrer-Policy (protects tokens in reset and invitation
+  links), X-Content-Type-Options, X-Frame-Options, Permissions-Policy.
+- **The seed script moved** from `public/docker/` to `docker/`, out of
+  the web root.
+
+### Email
+
+- **Sending over SMTP** with PHPMailer 6.10.0 (`composer.json`, installed
+  into `src/vendor` and committed, like the built assets). Settings in
+  `.env` (`MAIL_*`, `APP_URL`); empty `MAIL_HOST` = email off.
+  `src/includes/mailer.php` sends and renders one HTML + plain-text
+  layout in the site's colours; `src/includes/mail_templates.php` holds
+  the messages. A failed send is logged and never breaks the page.
+- **Emails:** invitation (when the link is for one address; the page
+  says "Invitation emailed to …" and still shows the link), password
+  reset, and security notices after a password change (own, by reset or
+  by an admin), a sign-in email change (sent to the old address), and
+  two-factor being turned off.
+- **Restoring a deactivated account now works:** the restore link was
+  created and thrown away; it is now emailed, and the home page says so.
+- **Links in emails** use `APP_URL` only in production, so a forged Host
+  header cannot point a reset link at another site.
+- **Local testing:** `make mail` starts Mailpit (inbox at
+  http://localhost:8025); `.env.example` shows the four settings.
+
+### About, Help, Privacy and error pages
+
+- **New pages**, linked from the footer on every page: **About** (what
+  the system is, roles, how accounts are made), **Help** (questions that
+  open to show the answer, grouped by task) and **Privacy** (what is
+  stored, who can see it, cookies, how long it is kept). The old footer
+  "About" link pointed at `README.txt`, which is not served (it was a 404).
+- **Error pages** for 400, 401, 403, 404, 405, 410, 419, 429, 500 and 503,
+  in the app's own style, with the right next step (dashboard or home,
+  go back, log in, try again) and a link to Help
+  (`src/includes/error_page.php`). Used for unknown URLs (via
+  `public/error.php`), expired forms, "no access" (replacing three
+  hand-made boxes and two plain-text messages), crashes and a database
+  that is down (a standalone page that needs neither).
+- **An expired form now returns 403**, not 500: Apache turned the old 419
+  into a 500.
+- **Server settings** (`docker/apache/app.conf`, `docker/php/app.ini`,
+  added to the image): `.htaccess` files were never read, so their rules
+  now live in Apache's config: no directory listings, no scripts run from
+  `uploads/`, and `public/docker/` (a seed script) is denied. Apache and
+  PHP versions are no longer advertised. PHP errors go to the log, not
+  into the page (they used to be shown to visitors and not logged).
+- `robots.txt` asks search engines not to index the site.
+
+### Admin is account management only
+
+- **Top bar for admins:** Dashboard, Users, Invitations. Resources is no
+  longer offered; `/resources.php` and `/students.php` answer 403 while
+  acting as admin (an admin who also teaches switches to Teacher).
+- **Users** is the account list only: roles, a new **Status** column,
+  joined date, Edit. Removed for admins: the "Students sheet" view
+  (`?view=sheet`, Current / Completed tabs, course chips, CSV download,
+  Full screen), the course filter and the lab-details progress column.
+- **One user's page** for admins keeps Account, Lab details (which admins
+  can correct) and Courses; the publications and awards sections are
+  teachers' only.
+- **Admin dashboard:** removed the "Students sheet" row.
+
+### Clearer separation and no duplicate actions
+
+- **Top bar** is now a solid ink-blue band with bold labels; the current
+  page is a lighter tab with an amber rule. The mobile drawer uses the
+  same colours.
+- **Panels stand apart from the page**: a light grey page, gray-300
+  borders and a soft shadow on cards, tables and tiles; dashboard cards
+  get a ruled header strip.
+- **Tables** have a blue-tinted header row with a heavier rule.
+- **Tools** (search, filters, Download CSV, Full screen) sit in their own
+  blue-tinted strip, and are real buttons instead of text-like links.
+- **Buttons and inputs** have a 3:1 border (WCAG 1.4.11) and semibold
+  labels.
+- **Students: Current / Completed** are now a segmented view switch
+  (`.view-tabs`) above the search bar, with icons and count badges; the
+  selected group is a raised white tab with a blue count. On phones the
+  two tabs share the width equally.
+- **Resources: the two tab groups** (Shared resources, Lab publications)
+  sit in one compact panel, each label on the same line as its tabs,
+  instead of two stacked blocks with a large gap between them.
+- **Profile pages** (My profile and a student's page under Students):
+  the header, the "On this page" list and every section (Personal,
+  Study, Research, theses, papers, publications, courses) are now
+  separate white panels. Each section has a grey header strip with a
+  blue marker; the current section in the list is highlighted, and the
+  "Lab details filled in" box takes the blue tool tint.
+- **Every switch now shows its selected state the same way** (blue text,
+  a blue marker, a raised or tinted background): the Publications &
+  awards tabs on My profile, the Settings section list (a panel; Danger
+  zone selected in red), "All users / Students sheet" (selected half
+  solid blue), the option cards (theme, invite role, user roles, "act
+  as"), and the tabs in the full-screen sheet bar. All invitations is a
+  panel like the other sections.
+- **One Add per empty list:** while a list of theses, papers or
+  publications is empty, only "Add your first ..." is shown; the
+  header's "Add" returns once there is an entry.
+- **One entry point per destination.** Removed buttons that repeated a
+  top-bar tab on the same page: "Open the Students sheet" / "Open the
+  sheet" / the "Invite students" card (teacher dashboard), "Open my
+  profile" and the "Lab resources" tile (student dashboard), "Manage
+  users" / "All users" / "Invite by link" (admin dashboard and Users),
+  "Invite students" (Students), the "Settings" card link (dashboard),
+  "Account settings" (My profile), the back link on Invitations, and "My
+  profile" in the account menu while acting as a student. See
+  `docs/DESIGN.md`, "One entry point per destination".
+
 ### Resources, entries, completed courses and a larger type scale
 
 - **Profile split into sections** with an "On this page" side nav:
@@ -29,10 +185,9 @@ in `migrations/`, applied by the web container's entrypoint in name order.
   Other; migration `022`).
 - **Resources page** (`/resources.php`), linked for every role: Templates
   and Open data and code (teachers edit, students read; migration `025`),
-  Potential journals (a sheet: Journal name, Link, IF, CS, APC, Suggested
-  by, Submitted by, Published; teachers add and edit them, students take or
-  release them and mark their own submission published; migrations `028`
-  to `030`), and read-only tabs of
+  Potential journals (a shared sheet: Journal name, Link, IF, CS, APC,
+  Suggested by, Submitted by, Published, which students and teachers alike
+  add, edit and delete; migrations `028` to `031`), and read-only tabs of
   everyone's PublishedJournals, Conf.Proceedings, Conf.PresentationOnly
   and Awards, with full screen.
 - **Completed courses.** A student marks the current course completed

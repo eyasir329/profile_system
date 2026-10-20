@@ -23,32 +23,20 @@ require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
 require_once __DIR__ . '/../src/includes/ui.php';
 require_once __DIR__ . '/../src/includes/invites.php';
+require_once __DIR__ . '/../src/includes/mail_templates.php';
 require_login();
 ensure_active_role_valid();
 
 $page_id = 'invites';
 $acting  = active_user_role();
 if (!in_array($acting, ['teacher', 'admin'], true)) {
-    http_response_code(403);
-    $page_title = 'Invitations';
-    require __DIR__ . '/../src/includes/header.php';
-    ?>
-    <div class="page-narrow">
-      <section class="card">
-        <h1 class="page-title text-2xl">Teachers and admins only</h1>
-        <p class="page-desc">Only teachers and admins can invite people.</p>
-        <a class="btn btn-primary mt-6" href="<?= e(url_dashboard()) ?>">Back to dashboard</a>
-      </section>
-    </div>
-    <?php
-    require __DIR__ . '/../src/includes/footer.php';
-    exit;
+    require_once __DIR__ . '/../src/includes/error_page.php';
+    render_error_page(403, 'Invitations are made by teachers and admins.');
 }
 
 $meId      = (int)current_user_id();
 $actAdmin  = $acting === 'admin';
 $grantable = invite_grantable_roles([$acting]);
-$backUrl   = $actAdmin ? url_admin() : url_students();
 $ROLE_HELP = [
     'student' => 'Has a profile and edits their own data.',
     'teacher' => 'Also gets the read-only Students directory and can invite students.',
@@ -114,8 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $newId = (int)$pdo->lastInsertId();
             log_activity($meId, 'invite_create', 'invite=' . $newId . ';roles=' . implode(',', $roles));
+            // An invitation for one address is also emailed to it. The link
+            // is still shown below, in case the email does not arrive.
+            $emailed = $email !== ''
+                ? mail_invitation($email, $pair['token'], $roles, current_user_name(), date('Y-m-d', strtotime('+' . $days . ' days')))
+                : null;
             // Kept in the session for exactly one page view; never stored.
-            $_SESSION['invite_just_created'] = ['id' => $newId, 'token' => $pair['token']];
+            $_SESSION['invite_just_created'] = ['id' => $newId, 'token' => $pair['token'], 'email' => $email, 'emailed' => $emailed];
             header('Location: ' . url_invites() . '?done=created');
             exit;
         }
@@ -127,8 +120,7 @@ $fresh = null;
 if (isset($_SESSION['invite_just_created']) && is_array($_SESSION['invite_just_created'])) {
     $fresh = $_SESSION['invite_just_created'];
     unset($_SESSION['invite_just_created']);
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    $fresh['url'] = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . url_register() . '?invite=' . $fresh['token'];
+    $fresh['url'] = mail_link(url_register() . '?invite=' . $fresh['token']) ?: url_register() . '?invite=' . $fresh['token'];
 }
 
 $flash = [];
@@ -164,7 +156,6 @@ $page_title = 'Invitations';
 require __DIR__ . '/../src/includes/header.php';
 ?>
 <div class="page">
-  <a class="back-link" href="<?= e($backUrl) ?>"><?= pf_icon('back') ?> <?= $actAdmin ? 'Users' : 'Students' ?></a>
   <header class="page-header">
     <div>
       <h1 class="page-title">Invitations</h1>
@@ -177,8 +168,16 @@ require __DIR__ . '/../src/includes/header.php';
 
   <?php if ($fresh): ?>
     <section class="alert alert-success mb-8 block" aria-labelledby="inv-fresh-h">
-      <h2 class="flex items-center gap-2 font-bold" id="inv-fresh-h"><?= pf_icon('check') ?> Invitation link created</h2>
-      <p class="mt-1 text-foreground">Copy it now and send it to the person you are inviting. For security it is shown <strong>only this once</strong>; if you lose it, cancel it below and create a new one.</p>
+      <?php if (!empty($fresh['emailed'])): ?>
+        <h2 class="flex items-center gap-2 font-bold" id="inv-fresh-h"><?= pf_icon('mail') ?> Invitation emailed to <?= e($fresh['email']) ?></h2>
+        <p class="mt-1 text-foreground">They’ll get a link to create their account. If it doesn’t arrive, copy the link below and send it yourself. It is shown <strong>only this once</strong>.</p>
+      <?php else: ?>
+        <h2 class="flex items-center gap-2 font-bold" id="inv-fresh-h"><?= pf_icon('check') ?> Invitation link created</h2>
+        <?php if (($fresh['emailed'] ?? null) === false): ?>
+          <p class="mt-1 font-medium text-warning">The email to <?= e($fresh['email']) ?> could not be sent.</p>
+        <?php endif; ?>
+        <p class="mt-1 text-foreground">Copy it now and send it to the person you are inviting. For security it is shown <strong>only this once</strong>; if you lose it, cancel it below and create a new one.</p>
+      <?php endif; ?>
       <div class="copy-box mt-3">
         <span class="value bg-layer" data-invite-url><?= e($fresh['url']) ?></span>
         <button type="button" class="btn btn-primary btn-sm" x-copy data-copy="<?= e($fresh['url']) ?>"><?= pf_icon('copy') ?> Copy link</button>
@@ -253,7 +252,7 @@ require __DIR__ . '/../src/includes/header.php';
       </form>
     </section>
 
-    <section aria-labelledby="inv-list-h">
+    <section class="section mt-0" aria-labelledby="inv-list-h">
       <header class="section-head">
         <h2 class="section-title" id="inv-list-h">
           <?= $actAdmin ? 'All invitations' : 'Your invitations' ?>
@@ -273,7 +272,7 @@ require __DIR__ . '/../src/includes/header.php';
               $names = $joined[(int)$inv['id']] ?? [];
               $isFresh = $fresh && (int)$fresh['id'] === (int)$inv['id'];
           ?>
-            <li class="flex items-start justify-between gap-4 border-b border-layer-line py-4<?= $state === 'active' ? '' : ' opacity-70' ?>">
+            <li class="flex items-start justify-between gap-4 border-b border-layer-line py-4 last:border-b-0<?= $state === 'active' ? '' : ' opacity-70' ?>">
               <div class="min-w-0">
                 <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <?= ui_roles(explode(',', (string)$inv['roles'])) ?>

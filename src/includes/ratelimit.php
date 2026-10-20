@@ -27,20 +27,29 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 
 /**
- * Best-effort client IP. Returns the leftmost entry of X-Forwarded-For
+ * Best-effort client IP. Behind a trusted proxy: CF-Connecting-IP, else the rightmost entry of X-Forwarded-For
  * when TRUST_PROXY=1, otherwise REMOTE_ADDR. Falls back to "0.0.0.0"
  * if neither is set (e.g. CLI).
  */
 function client_ip(): string
 {
     $trustProxy = getenv('TRUST_PROXY') === '1';
-    if ($trustProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        // X-Forwarded-For is "client, proxy1, proxy2, ..." — the first
-        // entry is the original client. Take the leftmost valid IP.
-        $parts = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
-        $candidate = trim($parts[0] ?? '');
-        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
-            return $candidate;
+    if ($trustProxy) {
+        // Behind Cloudflare: CF-Connecting-IP is set by Cloudflare itself.
+        $cf = trim((string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($cf !== '' && filter_var($cf, FILTER_VALIDATE_IP)) {
+            return $cf;
+        }
+        // Otherwise X-Forwarded-For. Its LEFT entries are whatever the
+        // visitor sent (anyone can type a fake one, which would dodge the
+        // per-IP limits); the RIGHTMOST is the address the trusted proxy
+        // in front of us saw. Use that.
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $parts = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+            $candidate = trim((string)end($parts));
+            if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
+                return $candidate;
+            }
         }
     }
     $remote = $_SERVER['REMOTE_ADDR'] ?? '';

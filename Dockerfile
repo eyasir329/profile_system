@@ -40,6 +40,13 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
 # Apache modules.
 RUN a2enmod rewrite headers
 
+# Apache and PHP settings: error pages, no directory listings, no code in
+# uploads, no version headers, errors logged instead of shown.
+# "zz-" so it loads after the image's security.conf, which it overrides.
+COPY docker/apache/app.conf /etc/apache2/conf-available/zz-profile-system.conf
+RUN a2enconf zz-profile-system
+COPY docker/php/app.ini /usr/local/etc/php/conf.d/zz-profile-system.ini
+
 # Working directory. The whole project is copied to /var/www, but Apache's
 # doc root is /var/www/html. We sync the public/ tree into html/ below.
 WORKDIR /var/www

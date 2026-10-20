@@ -62,10 +62,6 @@ if ($isStudentView) {
     $pubCount   = 0;
     foreach (['pub_journals', 'pub_proceedings', 'pub_presentations', 'awards'] as $k) { $pubCount += count($myEntries[$k]); }
     $journalsAll   = (int)$pdo->query('SELECT COUNT(*) FROM lab_journals')->fetchColumn();
-    $journalsTaken = $pdo->prepare('SELECT COUNT(*) FROM lab_journal_takers WHERE user_id = :u');
-    $journalsTaken->execute(['u' => $userId]);
-    $journalsTaken = (int)$journalsTaken->fetchColumn();
-    $resourcesAll  = (int)$pdo->query('SELECT (SELECT COUNT(*) FROM lab_templates) + (SELECT COUNT(*) FROM lab_resources)')->fetchColumn();
     $cur = $myCourses[0] ?? null;
     $tiles = [
         ['cap', 'My course', $cur
@@ -74,10 +70,8 @@ if ($isStudentView) {
          url_profile() . '#sec-courses'],
         ['book', 'Publications & awards', $pubCount === 0 ? 'Add your first' : $pubCount . ($pubCount === 1 ? ' entry' : ' entries'),
          url_profile() . '#sec-publications'],
-        ['check', 'Potential journals', $journalsAll === 0 ? 'None suggested yet' : $journalsTaken . ' taken · ' . $journalsAll . ' suggested',
+        ['check', 'Potential journals', $journalsAll === 0 ? 'None yet: add one' : $journalsAll . ($journalsAll === 1 ? ' journal' : ' journals'),
          url_resources() . '?tab=journals'],
-        ['folder', 'Lab resources', $resourcesAll === 0 ? 'Nothing yet' : $resourcesAll . ($resourcesAll === 1 ? ' item' : ' items'),
-         url_resources()],
     ];
 } elseif ($activeRole === 'teacher') {
     // Every active student and how complete their lab details are.
@@ -146,13 +140,6 @@ require __DIR__ . '/../src/includes/header.php';
         </p>
       </div>
     </div>
-    <?php if ($isStudentView): ?>
-      <a class="btn btn-secondary" href="<?= e(url_profile()) ?>">Open my profile</a>
-    <?php elseif ($activeRole === 'teacher'): ?>
-      <a class="btn btn-secondary" href="<?= e(url_students()) ?>"><?= pf_icon('users') ?> Open the Students sheet</a>
-    <?php elseif ($activeRole === 'admin'): ?>
-      <a class="btn btn-secondary" href="<?= e(url_admin()) ?>"><?= pf_icon('users') ?> Manage users</a>
-    <?php endif; ?>
   </header>
 
   <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]">
@@ -186,7 +173,7 @@ require __DIR__ . '/../src/includes/header.php';
               <?php endforeach; ?>
             </ul>
             <?php if (count($todo) > 3): ?>
-              <p class="mt-2 px-2 text-sm"><a href="<?= e(url_profile()) ?>">and <?= count($todo) - 3 ?> more on your profile</a></p>
+              <p class="mt-2 px-2 text-sm text-muted-foreground-1">and <?= count($todo) - 3 ?> more on your profile.</p>
             <?php endif; ?>
           <?php endif; ?>
           <?php if ($waiting): ?>
@@ -219,11 +206,9 @@ require __DIR__ . '/../src/includes/header.php';
       <section class="card" aria-labelledby="dash-students-h">
         <div class="card-head">
           <h2 class="card-title" id="dash-students-h">Students</h2>
-          <a class="card-link" href="<?= e(url_students()) ?>">Open the sheet</a>
         </div>
         <?php if (!$people): ?>
-          <p class="text-sm text-muted-foreground-2">No students yet. Invite them and they will appear here once they register.</p>
-          <a class="btn btn-primary mt-4" href="<?= e(url_invites()) ?>"><?= pf_icon('plus') ?> Invite students</a>
+          <p class="text-sm text-muted-foreground-2">No students yet. Create an invitation link under Invitations; students appear here once they register.</p>
         <?php else: ?>
           <p class="text-sm text-muted-foreground-2">
             <strong class="font-semibold text-foreground"><?= count($people) ?></strong> <?= count($people) === 1 ? 'student' : 'students' ?>.
@@ -250,22 +235,11 @@ require __DIR__ . '/../src/includes/header.php';
         <?php endif; ?>
       </section>
 
-      <section class="card" aria-labelledby="dash-invite-h">
-        <div class="action-row">
-          <div>
-            <strong id="dash-invite-h">Invite students</strong>
-            <p>Create a link a student opens to register. The day you create it becomes their enrolment date.</p>
-          </div>
-          <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invitations</a>
-        </div>
-      </section>
-
       <?php elseif ($activeRole === 'admin'): ?>
       <!-- ===== Admin: the accounts ===== -->
       <section class="card" aria-labelledby="dash-users-h">
         <div class="card-head">
           <h2 class="card-title" id="dash-users-h">Accounts</h2>
-          <a class="card-link" href="<?= e(url_admin()) ?>">All users</a>
         </div>
         <dl class="facts">
           <div><dt><?= ui_role('student') ?></dt><dd><a href="<?= e(url_admin()) ?>?role=student"><?= $stats['students'] ?></a></dd></div>
@@ -280,19 +254,9 @@ require __DIR__ . '/../src/includes/header.php';
         <div class="action-row">
           <div>
             <strong id="dash-admin-h">Add someone</strong>
-            <p>Send an invitation link, or create the account yourself and set a password.</p>
+            <p>Create the account yourself and set a password. To let people register themselves, use Invitations.</p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invite by link</a>
-            <a class="btn btn-secondary" href="<?= e(url_admin_user()) ?>"><?= pf_icon('plus') ?> New user</a>
-          </div>
-        </div>
-        <div class="action-row">
-          <div>
-            <strong>Students sheet</strong>
-            <p>Every student’s lab details in the workbook’s layout.</p>
-          </div>
-          <a class="btn btn-secondary" href="<?= e(url_admin()) ?>?view=sheet"><?= pf_icon('expand') ?> Open sheet</a>
+          <a class="btn btn-secondary" href="<?= e(url_admin_user()) ?>"><?= pf_icon('plus') ?> New user</a>
         </div>
       </section>
       <?php endif; ?>
@@ -304,7 +268,6 @@ require __DIR__ . '/../src/includes/header.php';
       <section class="card" aria-labelledby="dash-account-h">
         <div class="card-head">
           <h2 class="card-title" id="dash-account-h">Account</h2>
-          <a class="card-link" href="<?= e(url_settings()) ?>">Settings</a>
         </div>
         <dl class="facts is-single">
           <div>

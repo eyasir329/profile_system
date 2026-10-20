@@ -63,6 +63,8 @@ while ($attempts < $maxAttempts) {
 
 if (!$pdo) {
     error_log('Database connection error after ' . $maxAttempts . ' attempts: ' . ($lastError ? $lastError->getMessage() : 'unknown'));
-    http_response_code(500);
-    exit('Could not connect to the database. Check your DB_* environment variables and that the database service is running.');
+    // The cause goes to the error log above; visitors get the standalone
+    // "temporarily unavailable" page (it needs no session or database).
+    require_once __DIR__ . '/error_page.php';
+    render_error_page(503, '', minimal: true);
 }

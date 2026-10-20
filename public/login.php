@@ -45,6 +45,9 @@ if (isset($_GET['logged_out']) && $_GET['logged_out'] === '1') {
 if (isset($_GET['reset']) && $_GET['reset'] === '1') {
     $flash[] = ['type' => 'success', 'title' => 'Password updated', 'body' => 'You can now log in with your new password.'];
 }
+if (isset($_GET['signed_out']) && $_GET['signed_out'] === '1') {
+    $flash[] = ['type' => 'info', 'title' => 'Signed out', 'body' => 'Your password or sign-in settings changed, so you were signed out everywhere. Log in again.'];
+}
 if (isset($_GET['deactivated']) && $_GET['deactivated'] === '1') {
     $flash[] = ['type' => 'warn', 'title' => 'Account deactivated', 'body' => 'Your account is currently deactivated. Use the link in your deactivation email to reactivate it, or contact support.'];
 }
@@ -60,6 +63,8 @@ if (isset($_GET['restored']) && $_GET['restored'] === '1') {
 function finalize_login(int $userId, string $name, array $roles, string $chosenRole): void
 {
     session_regenerate_id(true);
+    global $pdo;
+    $_SESSION['epoch']         = session_epoch_of($pdo, $userId);
     $_SESSION['user_id']       = $userId;
     $_SESSION['user_role']     = $chosenRole;
     $_SESSION['user_roles']    = $roles;
@@ -158,6 +163,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $st->execute(['e' => $email]);
             $u = $st->fetch();
             $submittedPassword = (string)$_POST['password'];
+            // Unknown email: still spend the time of a password check, so
+            // response time doesn't reveal which emails have accounts.
+            if (!$u) { password_verify($submittedPassword, '$2y$10$UFukhwq.jPHLPMhTV9od1./PWW1uSeMy9y5KLZ9mnOYJbHShVNr1O'); }
             if (!$overEmail && !$overIp && $u && password_verify($submittedPassword, $u['password_hash'])) {
                 // Load the role set from the join table.
                 $roleSt = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :u');

@@ -359,7 +359,8 @@ export function initProfileEditor() {
           render(card);
           close();
           applyState(res.state);
-          toast(def.label + (res.value ? ' saved.' : ' cleared.'), { type: 'success' });
+          if (res.notice) toast(res.notice, { type: 'info', duration: 0 });
+          else toast(def.label + (res.value ? ' saved.' : ' cleared.'), { type: 'success' });
         },
         (res) => {
           busy = false;

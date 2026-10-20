@@ -114,7 +114,13 @@ an `aria-label`.
 | `.card` | Bordered panel for a form or a self-contained summary. Never nested. Consecutive cards space themselves. |
 | `.card-head`, `.card-title`, `.card-desc`, `.card-link` | Card heading row, title, one-line description, small link in the head |
 | `.card-danger` | Red border and title, for destructive areas |
-| `.section`, `.section-head`, `.section-title`, `.section-count`, `.section-desc` | Unboxed block with a ruled heading, for long reading pages |
+| `.card-head` (in a card) | A grey header strip ruled off from the card body (dashboard cards) |
+| `.section`, `.section-head`, `.section-title`, `.section-count`, `.section-desc` | A panel with a grey header strip and a blue marker: profile sections, a person's page, About, Help, Privacy, the invitation list. `.section-head` outside a `.section` is a plain ruled heading |
+| `.panel-tint` | A tinted box inside a card for something to act on now (new backup codes) |
+| `.doc` | Reading text in a panel: paragraph spacing, bulleted lists |
+| `.faq` | Help: `<details>` questions that open to show the answer (`.faq-caret` icon) |
+| `.error-card`, `.error-code`, `.error-actions`, `.error-help` | The error page (rendered by `render_error_page()`; don't build one by hand) |
+| `.toolbar`, `.sheet-tools` | Search, filters, export and full screen in one tinted strip above a table, apart from the data |
 | `.action-row` | Explanation on the left, one action on the right; stack several in a card |
 
 ```php
@@ -163,23 +169,37 @@ and courses are plain `.badge`.
 ## Navigation
 
 - **Top bar** (`.navbar`, `.brand`, `.nav-links`, `.nav-link`, `.nav-end`,
-  `.nav-drawer`): rendered only by `src/includes/header.php`. To add a
-  destination, add a row to `$NAV_ITEMS_BY_ROLE` and `$NAV_HREF_FOR` there.
+  `.nav-drawer`): rendered only by `src/includes/header.php`. A solid
+  ink-blue band (`--appbar*` tokens); the current page is a lighter tab
+  with an amber rule. To add a destination, add a row to
+  `$NAV_ITEMS_BY_ROLE` and `$NAV_HREF_FOR` there. Each destination appears
+  once per page: don't add an in-page button that repeats a tab.
 - **Menu** (`.menu-wrap`, `.menu-trigger`, `.menu`, `.menu-item`,
   `.menu-label`, `.menu-sep`): a dropdown driven by `x-data="dropdown"`.
   Copy the account menu in `header.php`.
 - **Side navigation** (`.side-nav`, `.side-nav-item`): the settings
-  sections. A vertical list from `lg`, a scrolling strip below. Mark the
-  current item with `aria-current="page"`.
-- **Segmented switch** (`.segmented`): two or three views of the same
-  data; the current link has `aria-current="true"`.
+  sections and the profile's "On this page". A vertical list from `lg`, a
+  scrolling strip below. Mark the current item with `aria-current="page"`
+  (or `"true"`): blue text, tool tint, a bar on the left (red for
+  `.is-danger`). Add `.is-panel` to make a standalone list a panel from
+  `lg` up (Settings).
+- **Segmented switch** (`.segmented`): two views of the same data inside a
+  toolbar; the current link has `aria-current="true"` and is solid blue.
+- **View tabs** (`.view-tabs`, `.view-tabs-count`): two or three groups of
+  the same list, above its toolbar (Students: Current / Completed). A
+  segmented control on the tool tint; the current link
+  (`aria-current="page"`) is a raised white tab with a blue count. Equal
+  widths on phones; `.is-compact` in the full-screen bar.
 - **Sheet tabs** (`.sheet-tabs`): links styled as underlined tabs, current
   one `aria-current="page"`, with an optional `.tab-count`. Add
   `.is-wrap` when there are many (they wrap as pills, none hidden) and
-  `.is-compact` inside the full-screen bar. Used by the Students sheet and
-  `/resources.php`. Wrap several groups in `.tab-groups` > `.tab-group`
-  with a `.tab-group-label` each (Resources: "Shared by teachers" and
-  "Lab publications").
+  `.is-compact` inside the full-screen bar (current tab raised like
+  `.view-tabs`). Used by `/resources.php`. Wrap several groups in
+  `.tab-groups` > `.tab-group` with a `.tab-group-label` each: one tinted
+  panel, each label on the same line as its tabs (Resources: "Shared
+  resources" and "Lab publications").
+- **Footer links** (`.site-footer-links`): About, Help, Privacy, rendered
+  by `src/includes/footer.php`.
 - **Filter chips** (`.filter-chips`, `.filter-chips-label`): small pill
   links with counts that narrow a list, current one `aria-current="page"`.
   The Students sheet filters by course with them.
@@ -297,7 +317,7 @@ Used by `/profile.php`.
 | `.entry-list`, `.entry`, `.entry-body`, `.entry-title`, `.entry-sub`, `.entry-meta`, `.entry-text`, `.entry-actions`, `.entry-action` | One entry of a repeating section (a thesis, paper, publication or award) with Edit and Delete |
 | `.entry-chips`, `.entry-citation`, `.entry-bibtex` | A publication card: date, type and impact-factor badges, the citation, folded BibTeX with a copy button |
 | `.entry-form` | An entry's form: three columns from `sm` up, each field sets `--span` (1 to 3) |
-| `.tab-list`, `.tab-count`, `.tab-panel-head` | Tabs inside a section (Publications & awards); `role="tablist"` buttons driven by the profile editor |
+| `.tab-list`, `.tab-count`, `.tab-panel-head` | Tabs inside a section (Publications & awards); `role="tablist"` buttons driven by the profile editor. Same look as `.view-tabs`: the selected tab is raised with a blue count |
 | `.section-empty` | "Add your first …" button while a section has no entries |
 
 The fields themselves come from `lab_field_defs()` in
@@ -321,3 +341,15 @@ All in `src/includes/ui.php`. Each returns an HTML string.
 
 Icons are decorative (`aria-hidden`). Pair them with text, or put an
 `aria-label` on the button.
+
+## Server helpers
+
+| Helper | File | Use |
+| --- | --- | --- |
+| `render_error_page($code, $detail = '', minimal: false)` | `src/includes/error_page.php` | Send an error status and the error page, then stop. `minimal: true` when the session or database may be unavailable |
+| `mail_invitation()`, `mail_password_reset()`, `mail_password_changed()`, `mail_email_changed()`, `mail_two_factor_off()`, `mail_backup_code_used()`, `mail_verify_new_email()`, `mail_account_deactivated()` | `src/includes/mail_templates.php` | Send one email; true when the server accepted it. Never throws |
+| `mail_send($to, $name, $msg)`, `mail_enabled()`, `mail_link($path)` | `src/includes/mailer.php` | Low-level sending (one HTML + text layout); whether email is set up; an absolute link from `APP_URL` |
+| `request_email_change($pdo, $userId, $name, $newEmail)` | `src/includes/email_change.php` | Change your own sign-in email: `'sent'` (confirmation emailed), `'changed'` (no email set up) or `'failed'` |
+| `second_factor_check($userId, $input)` | `src/includes/auth.php` | The two-factor step: `'totp'`, `'backup'`, `'locked'` or `''` |
+| `session_epoch_bump($pdo, $userId, $keepCurrent = true)` | `src/includes/auth.php` | Sign out every other session of an account (call after any password or two-factor change) |
+| `housekeeping_run($pdo)` | `src/includes/housekeeping.php` | Delete what is past its keep-by date (also `make purge`) |

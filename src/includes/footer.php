@@ -12,7 +12,11 @@ if (!empty($hide_footer)) { return; }
 <footer class="site-footer">
   <div class="site-footer-inner">
     <span>Profile System</span>
-    <span>Accounts are by invitation · <a href="<?= e(url_for('README.txt')) ?>">About</a></span>
+    <nav class="site-footer-links" aria-label="About this site">
+      <a href="<?= e(url_about()) ?>"<?= ($page_id ?? '') === 'about' ? ' aria-current="page"' : '' ?>>About</a>
+      <a href="<?= e(url_help()) ?>"<?= ($page_id ?? '') === 'help' ? ' aria-current="page"' : '' ?>>Help</a>
+      <a href="<?= e(url_privacy()) ?>"<?= ($page_id ?? '') === 'privacy' ? ' aria-current="page"' : '' ?>>Privacy</a>
+    </nav>
   </div>
 </footer>
 

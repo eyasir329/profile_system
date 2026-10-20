@@ -31,6 +31,9 @@ function url_resources(): string { return url_for('resources.php'); }
 function url_switch_role(): string { return url_for('switch_role.php'); }
 function url_forgot(): string { return url_for('forgot_password.php'); }
 function url_reset(): string  { return url_for('reset_password.php'); }
+function url_about(): string  { return url_for('about.php'); }
+function url_help(): string   { return url_for('help.php'); }
+function url_privacy(): string { return url_for('privacy.php'); }
 
 function is_logged_in(): bool
 {

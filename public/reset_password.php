@@ -18,6 +18,7 @@ require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
+require_once __DIR__ . '/../src/includes/mail_templates.php';
 
 if (is_logged_in()) {
     header('Location: ' . url_dashboard());
@@ -58,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :u AND used_at IS NULL')->execute(['u' => $userId]);
             $pdo->commit();
             log_activity($userId, 'password_reset', null);
+            session_epoch_bump($pdo, $userId, keepCurrent: false);   // sign out everywhere
+            $who = $pdo->prepare('SELECT name, email FROM users WHERE id = :u');
+            $who->execute(['u' => $userId]);
+            if ($w = $who->fetch()) { mail_password_changed((string)$w['email'], (string)$w['name']); }
             header('Location: ' . url_login() . '?reset=1');
             exit;
         } catch (Throwable $e) {

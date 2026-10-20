@@ -24,6 +24,8 @@ require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
 require_once __DIR__ . '/../src/includes/lab_fields.php';
 require_once __DIR__ . '/../src/includes/ui.php';
+require_once __DIR__ . '/../src/includes/mail_templates.php';
+require_once __DIR__ . '/../src/includes/email_change.php';
 require_login();
 
 $userId = (int)current_user_id();
@@ -97,16 +99,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($exists->fetch()) {
                     $errors['email'] = 'That email is already in use.';
                 } else {
-                    $upd = $pdo->prepare('UPDATE users SET name=:n, email=:e WHERE id=:id');
-                    $upd->execute([
-                        'n' => $values['name'],
-                        'e' => $values['email'],
-                        'id' => $userId,
-                    ]);
+                    // The name saves now. A new email waits for confirmation
+                    // from the new address (src/includes/email_change.php).
+                    $pdo->prepare('UPDATE users SET name = :n WHERE id = :id')
+                        ->execute(['n' => $values['name'], 'id' => $userId]);
                     $_SESSION['user_name'] = $values['name'];
-                    log_activity($userId, 'account_update', 'name/email');
+                    log_activity($userId, 'account_update', 'name');
                     if ($newTheme !== null) { $saveTheme($newTheme); }
-                    $done('account', 'account');
+                    $emailResult = strcasecmp((string)$me['email'], (string)$values['email']) !== 0
+                        ? request_email_change($pdo, $userId, (string)$values['name'], (string)$values['email'])
+                        : '';
+                    if ($emailResult === 'failed') {
+                        $errors['email'] = 'We couldn’t send the confirmation email, so your email address was not changed. Try again later.';
+                    } else {
+                        $done('account', $emailResult === 'sent' ? 'email_sent' : 'account');
+                    }
                 }
             } catch (PDOException $e) {
                 $errors['form'] = 'Could not save. Please try again.';
@@ -144,6 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newHash = password_hash($vPw['value'], PASSWORD_DEFAULT);
             $pdo->prepare('UPDATE users SET password_hash = :h WHERE id = :id')->execute(['h' => $newHash, 'id' => $userId]);
             log_activity($userId, 'password_change', null);
+            session_epoch_bump($pdo, $userId);   // signs out other devices, keeps this one
+            mail_password_changed((string)$me['email'], (string)$me['name']);
             $done('security', 'password');
         }
         $tab = 'security';
@@ -174,11 +183,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 )->execute(['u' => $userId, 'h' => $pair['hash']]);
             } catch (Throwable $e) { /* table not present yet */ }
             log_activity(null, 'account_deactivate', $logDetail);
+            // The restore link is only ever sent by email (the token is not stored in clear).
+            $restoreMailed = mail_account_deactivated((string)$me['email'], (string)$me['name'], $pair['token']);
             $_SESSION = [];
             session_destroy();
-            // In dev mode we'd email the restore link; here we just redirect
-            // to a page that says "deactivated, check your email".
-            header('Location: ' . url_home() . '?deactivated=1');
+            header('Location: ' . url_home() . '?deactivated=' . ($restoreMailed ? '1' : '0'));
             exit;
         }
         $tab = 'danger';
@@ -195,6 +204,7 @@ if (($_COOKIE['ps_theme'] ?? '') !== $values['theme'] && isset($THEMES[$values['
 // One-time confirmations after a redirect.
 $notices = [
     'account'  => 'Your account details were saved.',
+    'email_sent' => 'Check your new email inbox: open the link we sent to confirm the change. Until then, keep signing in with your current address.',
     'theme'    => 'Theme updated.',
     'password' => 'Password changed. Use the new one next time you sign in.',
 ];
@@ -206,17 +216,20 @@ if (isset($_GET['totp_disabled'])) {
 }
 
 // Two-factor state (Security tab).
-$tfEnabled = false; $tfSecret = ''; $tfCodes = []; $enrolling = false; $tfJustEnabled = false;
+$tfEnabled = false; $tfSecret = ''; $tfCodes = []; $tfLeft = 0; $enrolling = false; $tfJustEnabled = false;
 if ($tab === 'security') {
-    $tfSt = $pdo->prepare('SELECT secret, enabled, backup_codes FROM two_factor WHERE user_id = :u');
+    $tfSt = $pdo->prepare('SELECT secret, enabled FROM two_factor WHERE user_id = :u');
     $tfSt->execute(['u' => $userId]);
     $tfRow = $tfSt->fetch();
     $tfEnabled = $tfRow && (int)$tfRow['enabled'] === 1;
     $tfSecret  = (string)($tfRow['secret'] ?? '');
-    if ($tfEnabled && !empty($tfRow['backup_codes'])) {
-        $bc = json_decode((string)$tfRow['backup_codes'], true);
-        if (is_array($bc)) { $tfCodes = array_values(array_map('strval', $bc)); }
+    // Backup codes are stored hashed: the plain codes exist only right
+    // after they were made (setup_totp.php), shown once here.
+    if ($tfEnabled && !empty($_SESSION['tf_new_codes']) && is_array($_SESSION['tf_new_codes'])) {
+        $tfCodes = array_map('strval', $_SESSION['tf_new_codes']);
     }
+    unset($_SESSION['tf_new_codes']);
+    $tfLeft = $tfEnabled ? backup_codes_left($pdo, $userId) : 0;
     $enrolling     = isset($_GET['enroll']) && !$tfEnabled && $tfSecret !== '';
     $tfJustEnabled = $tfEnabled && isset($_GET['totp_enabled']);
 }
@@ -242,7 +255,7 @@ require __DIR__ . '/../src/includes/header.php';
   </header>
 
   <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-x-10 gap-y-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
-    <nav class="side-nav lg:sticky lg:top-20" aria-label="Settings sections">
+    <nav class="side-nav is-panel lg:sticky lg:top-24" aria-label="Settings sections">
       <?php foreach ($TABS as $key => [$label, $icon]): ?>
         <a href="?tab=<?= e($key) ?>" class="side-nav-item<?= $key === 'danger' ? ' is-danger' : '' ?>"<?= $tab === $key ? ' aria-current="page"' : '' ?>>
           <?= pf_icon($icon) ?> <span><?= e($label) ?></span>
@@ -278,7 +291,11 @@ require __DIR__ . '/../src/includes/header.php';
             </label>
             <input class="input" id="email" name="email" type="email" required maxlength="150" autocomplete="email"
                    value="<?= e($values['email']) ?>"<?= $invalid('email') ?> aria-describedby="email-hint email-err">
-            <p class="hint" id="email-hint">You sign in with this address, and it is the email your teachers see.</p>
+            <p class="hint" id="email-hint">You sign in with this address, and it is the email your teachers see.
+              <?php if (mail_enabled()): ?>A new address changes only after you confirm it from that inbox.<?php endif; ?></p>
+            <?php if (($pendingEmail = pending_email_change($pdo, $userId)) !== ''): ?>
+              <p class="hint is-ok">Waiting for confirmation: <strong><?= e($pendingEmail) ?></strong>. Open the link we sent there (it works for 24 hours).</p>
+            <?php endif; ?>
             <?= $errorLine('email', 'email-err') ?>
           </div>
         </section>
@@ -370,21 +387,35 @@ require __DIR__ . '/../src/includes/header.php';
         <?php if ($tfEnabled): ?>
           <p class="card-desc">Each time you sign in you’ll be asked for a 6-digit code from your authenticator app.</p>
           <?php if ($tfJustEnabled): ?>
-            <?= ui_alert('success', 'Two-factor authentication is now on. Save your backup codes somewhere safe.') ?>
+            <?= ui_alert('success', 'Two-factor authentication is now on.') ?>
           <?php endif; ?>
           <?php if ($tfCodes): ?>
-            <details class="mb-5 rounded-md border border-layer-line"<?= $tfJustEnabled ? ' open' : '' ?>>
-              <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Backup codes (<?= count($tfCodes) ?>)</summary>
-              <div class="border-t border-layer-line px-4 py-4">
-                <p class="mb-3 text-sm text-muted-foreground-2">Each code works once if you lose access to your authenticator app.</p>
-                <ul class="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
-                  <?php foreach ($tfCodes as $bc): ?>
-                    <li><code class="text-sm"><?= e($bc) ?></code></li>
-                  <?php endforeach; ?>
-                </ul>
-                <button type="button" class="btn btn-secondary btn-sm" x-copy data-copy="<?= e(implode("\n", $tfCodes)) ?>"><?= pf_icon('copy') ?> Copy all codes</button>
+            <div class="panel-tint mb-5">
+              <h3 class="font-bold">Your backup codes</h3>
+              <p class="mt-1 mb-3 text-sm text-muted-foreground-2">If you lose your phone, sign in with one of these instead of a 6-digit code. Each works once.
+                <strong class="text-foreground">Save them now: they are shown only this once.</strong></p>
+              <ul class="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
+                <?php foreach ($tfCodes as $bc): ?>
+                  <li><code class="text-sm font-semibold tracking-wider"><?= e($bc) ?></code></li>
+                <?php endforeach; ?>
+              </ul>
+              <button type="button" class="btn btn-secondary btn-sm" x-copy data-copy="<?= e(implode("\n", $tfCodes)) ?>"><?= pf_icon('copy') ?> Copy all codes</button>
+            </div>
+          <?php else: ?>
+            <div class="action-row">
+              <div>
+                <strong>Backup codes: <?= $tfLeft ?> left</strong>
+                <p><?= $tfLeft === 0 ? 'You have none, so losing your phone would lock you out. Make a new set.' : 'For signing in without your phone. Lost the list? Make a new set: the old codes stop working.' ?></p>
               </div>
-            </details>
+              <form method="post" action="setup_totp.php" x-confirm
+                    data-confirm-title="Make new backup codes?"
+                    data-confirm-body="Your current backup codes will stop working. The new ones are shown once."
+                    data-confirm-ok="Make new codes">
+                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="action" value="regen_codes">
+                <button class="btn btn-secondary" type="submit"><?= pf_icon('shield') ?> Make new backup codes</button>
+              </form>
+            </div>
           <?php endif; ?>
           <form method="post" action="setup_totp.php" x-confirm
                 data-confirm-title="Turn off two-factor authentication?"

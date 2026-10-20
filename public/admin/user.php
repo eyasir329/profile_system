@@ -30,6 +30,7 @@ require_once __DIR__ . '/../../src/includes/url.php';
 require_once __DIR__ . '/../../src/includes/validate.php';
 require_once __DIR__ . '/../../src/includes/lab_fields.php';
 require_once __DIR__ . '/../../src/includes/ui.php';
+require_once __DIR__ . '/../../src/includes/mail_templates.php';
 require_admin();
 
 $meId   = (int)current_user_id();
@@ -66,7 +67,7 @@ $LAB_ENTRIES = [
 $user = null;
 if (!$isNew) {
     $st = $pdo->prepare(
-        'SELECT u.id, u.name, u.email, u.deleted_at, u.scheduled_purge_at, u.created_at, p.*
+        'SELECT u.id, u.name, u.email, u.totp_required, u.deleted_at, u.scheduled_purge_at, u.created_at, p.*
            FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = :id LIMIT 1'
     );
     $st->execute(['id' => $userId]);
@@ -103,6 +104,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $action = (string)($_POST['action'] ?? 'save');
 
+    // ---- reset two-factor: for someone who lost their phone and backup codes ----
+    if (!$isNew && $action === 'reset_2fa') {
+        $pdo->prepare('DELETE FROM two_factor WHERE user_id = :u')->execute(['u' => $userId]);
+        $pdo->prepare('UPDATE users SET totp_required = 0 WHERE id = :u')->execute(['u' => $userId]);
+        clear_attempts('totp:' . $userId);
+        session_epoch_bump($pdo, $userId);
+        log_activity($meId, 'admin_2fa_reset', (string)$user['email']);
+        log_activity($userId, 'two_factor_reset', 'by admin');
+        mail_two_factor_off((string)$user['email'], (string)$user['name'], true);
+        header('Location: ' . url_admin() . '?id=' . $userId . '&done=2fa_reset');
+        exit;
+    }
+
     // ---- deactivate / restore / delete ----
     if (!$isNew && in_array($action, ['deactivate', 'restore', 'delete'], true)) {
         if ($action !== 'restore' && $locked !== '') {
@@ -120,6 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: ' . url_admin() . '?done=restored');
             exit;
         } else {
+            // The activity log has no foreign key, so it goes first.
+            $pdo->prepare('DELETE FROM activity WHERE user_id = :id')->execute(['id' => $userId]);
             $pdo->prepare('DELETE FROM users WHERE id = :id')->execute(['id' => $userId]);
             log_activity($meId, 'admin_user_delete', (string)$user['email']);
             header('Location: ' . url_admin() . '?done=deleted');
@@ -226,7 +242,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (array_diff($currentRoles, $values['roles']) || array_diff($values['roles'], $currentRoles)) {
                         log_activity($userId, 'role_change', implode(',', $values['roles']));
                     }
-                    if ($password !== '') { log_activity($userId, 'password_reset', 'by admin'); }
+                    if ($password !== '') {
+                        log_activity($userId, 'password_reset', 'by admin');
+                        session_epoch_bump($pdo, $userId);   // their other sessions end
+                        if (!$isSelf) { mail_password_changed((string)$values['email'], (string)$values['name'], true); }
+                    }
+                    if (strcasecmp((string)$user['email'], (string)$values['email']) !== 0) {
+                        mail_email_changed((string)$user['email'], (string)$values['name'], (string)$values['email']);
+                    }
                 }
                 header('Location: ' . url_admin() . '?id=' . $userId . '&done=' . ($isNew ? 'created' : 'updated'));
                 exit;
@@ -370,6 +393,26 @@ $backUrl    = $isNew ? url_admin() : url_admin() . '?id=' . $userId;
       <button class="btn btn-primary" type="submit"><?= $isNew ? 'Create user' : 'Save changes' ?></button>
     </div>
   </form>
+
+  <?php if (!$isNew && (int)$user['totp_required'] === 1): ?>
+    <section class="card mt-10" aria-labelledby="adm-2fa-h">
+      <h2 class="card-title mb-4" id="adm-2fa-h">Sign-in <span class="badge badge-success">Two-factor on</span></h2>
+      <div class="action-row">
+        <div>
+          <strong>Reset two-factor</strong>
+          <p>For someone who lost their phone and their backup codes. They can sign in with just their password, then set up two-factor again. They are emailed about it.</p>
+        </div>
+        <form method="post" action="<?= e($formAction) ?>" x-confirm
+              data-confirm-title="Reset two-factor for <?= e($user['name']) ?>?"
+              data-confirm-body="Only do this after checking it is really them asking. Signing in will need only their password until they set it up again."
+              data-confirm-ok="Reset two-factor">
+          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+          <input type="hidden" name="action" value="reset_2fa">
+          <button class="btn btn-secondary" type="submit"><?= pf_icon('shield') ?> Reset two-factor</button>
+        </form>
+      </div>
+    </section>
+  <?php endif; ?>
 
   <?php if (!$isNew): ?>
     <section class="card card-danger mt-10" aria-labelledby="adm-danger-h">

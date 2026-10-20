@@ -139,10 +139,39 @@ font listed in `--font-sans`. Numbers that change or line up use
 
 - Radius: 4 px badges, 6 px controls, 8 px cards, 10 px dialog. Full
   rounding is for avatars and dots.
-- Depth comes from hairlines. The only shadow (`--shadow-pop`) is on
-  things that float: menus, the dialog, toasts.
+- Depth comes from edges. Panels (cards, tables, tiles) have a gray-300
+  border and a 1 px `--panel-shadow`; things that float (menus, the
+  dialog, toasts) use `--shadow-pop`.
 - Transitions are 100 to 150 ms on colour and opacity. Everything honours
   `prefers-reduced-motion`.
+
+### Separation: every region has its own edge and colour
+
+Added October 2026 at the client's request: navigation, sections, tables,
+buttons and tools must each be clearly separable from the rest of the page.
+
+| Region | Treatment | Token |
+| --- | --- | --- |
+| Top bar | Solid ink blue, bold white labels; the current page is a lighter tab with an amber rule | `--appbar*` |
+| Page | Light grey, so white panels stand out | `--background` |
+| Cards | White, gray-300 border, soft shadow; `.card-head` is a grey strip ruled off from the body | `--card-line`, `--card-head`, `--panel-shadow` |
+| Profile sections | Each `.section` is a panel; `.section-head` inside it is a grey strip with a 4 px blue marker. The identity header and the section list are panels too | `--card-head`, `--primary` |
+| Tables | Blue-tinted header row with a 2 px rule; faint row stripes on sheets | `--table-head`, `--stripe` |
+| Tools (search, filters, export, full screen) | A blue-tinted strip of their own (`.toolbar`, `.sheet-tools`) | `--tools`, `--tools-line` |
+| Buttons and inputs | 3:1 border against white (WCAG 1.4.11), semibold labels, a small shadow | `--control-line` |
+
+### One entry point per destination
+
+A page never offers two controls that go to the same place. The top bar
+owns the page-level destinations (Dashboard, Students, Users, Resources,
+Invitations, My profile), and the account menu owns Settings and Log out.
+In-page links are kept only when they go somewhere more specific than a
+tab: a single student, a filtered list (`?role=student`), a profile
+section (`#sec-courses`), a sheet view, or a settings anchor (two-factor
+"Turn on"). So the dashboards carry no "Open the sheet", "Manage users",
+"Open my profile" or "Settings" buttons, Students and Users have no
+"Invite" button (Invitations is a tab), and the account menu hides "My
+profile" while a student already has it in the bar.
 
 ### Dark mode
 

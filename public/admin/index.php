@@ -2,14 +2,12 @@
 /**
  * Admin: every user, with create / edit / deactivate / delete.
  *
- * Route:  GET /admin/  or  /admin/index.php    compact list
- *         GET /admin/index.php?view=sheet       every field in one wide table
- *         GET /admin/index.php?id=<id>          one user's full profile
+ * Route:  GET /admin/  or  /admin/index.php    every account: roles, status, joined
+ *         GET /admin/index.php?id=<id>          one user's account and lab details
  * Auth:   require_admin() (the ACTIVE role must be admin)
  *
- * This is the same directory teachers get at /students.php, widened to all
- * users and all roles, plus role / status / course filters and the admin
- * actions. It is rendered by src/includes/directory.php; see that file for
+ * Account management only: role and status filters and the admin
+ * actions. The Students sheet (teachers' work) is not part of it. It is rendered by src/includes/directory.php; see that file for
  * the query parameters. Creating, editing and deleting happen on
  * /admin/user.php.
  */
