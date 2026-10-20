@@ -391,7 +391,7 @@ require __DIR__ . '/../../src/includes/header.php';
           <li class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-layer-line py-3 text-sm">
             <span class="mono font-semibold"><?= e($pl['ip']) ?></span>
             <span class="text-muted-foreground-2"><?= e(ui_device($pl['ua']) ?: 'Unknown device') ?></span>
-            <a class="ml-auto text-muted-foreground-1" href="<?= e($self . '?q=' . urlencode((string)$pl['ip'])) ?>" title="Everyone seen from this address"><?= (int)$pl['n'] ?> event<?= (int)$pl['n'] === 1 ? '' : 's' ?> · last <?= e(date('M j, H:i', strtotime((string)$pl['last']))) ?></a>
+            <a class="ml-auto inline-flex min-h-6 items-center text-muted-foreground-1" href="<?= e($self . '?q=' . urlencode((string)$pl['ip'])) ?>" title="Everyone seen from this address"><?= (int)$pl['n'] ?> event<?= (int)$pl['n'] === 1 ? '' : 's' ?> · last <?= e(date('M j, H:i', strtotime((string)$pl['last']))) ?></a>
           </li>
         <?php endforeach; ?>
       </ul>

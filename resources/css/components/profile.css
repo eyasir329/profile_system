@@ -191,7 +191,7 @@
   /* Tabs inside a section (publications and awards). */
   /* Same segmented look as .view-tabs (data.css): the selected tab is raised and blue. */
   .tab-list {
-    @apply mt-4 flex max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:inline-flex;
+    @apply relative mt-4 flex max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:inline-flex;
     background: var(--tools);
     border-color: var(--tools-line);
     scrollbar-width: none;

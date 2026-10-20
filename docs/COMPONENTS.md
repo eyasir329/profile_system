@@ -6,7 +6,7 @@ For layout (grids, spacing, widths) use Tailwind utilities directly.
 
 Contents: [Page](#page) · [Buttons](#buttons) · [Forms](#forms) ·
 [Surfaces](#surfaces) · [Feedback](#feedback) · [Navigation](#navigation) ·
-[Data](#data) · [Overlays](#overlays) · [Profile](#profile) · [Emails](#emails) · [Charts](#charts) ·
+[Data](#data) · [Overlays](#overlays) · [Profile](#profile) · [Emails](#emails) · [Charts](#charts) · [Home page](#home-page) ·
 [PHP helpers](#php-helpers)
 
 ## Page
@@ -390,6 +390,37 @@ colour-blind check. Text never takes a series colour.
 | `.chart-tip` | The one tooltip, created on `<body>` by `x-chart` |
 | `.chart-grid-2` | Two charts side by side from `lg` |
 | `.activity-line` (`.is-warning`, `.is-danger`) | One activity event: icon and sentence (Admin › Activity) |
+
+## Home page
+
+`resources/css/components/landing.css`, used only by `public/index.php`.
+One column on phones, two on tablets, the full layout from `lg`.
+
+| Class | What |
+| --- | --- |
+| `.landing` | Wrapper inside `.page-wide`: the page's top and bottom space |
+| `.landing-hero`, `.landing-hero-text`, `.landing-sample` | Headline and actions beside the sample profile (stacked below `lg`) |
+| `.landing-eyebrow` | Small pill above the headline ("Private to the lab · by invitation") |
+| `.landing-title`, `.landing-lead` | Fluid serif headline (`clamp()`, 32 to 52 px) and its paragraph |
+| `.landing-actions`, `.landing-note` | Button row (full-width buttons on phones) and the line under it |
+| `.landing-section`, `.landing-section-head`, `.landing-h2`, `.landing-sub` | A ruled section with its heading and one line of context |
+| `.landing-split` | Heading on the left, content on the right from `lg` ("How to get an account") |
+| `.feature-grid` > `.feature` (`.feature-icon`, `.feature-title`, `.feature-text`) | Feature cards: 1, 2 or 3 per row |
+| `.role-grid` > `.role-card` (`.role-card-summary`, `.role-card-list`) | One card per role with a tick list |
+| `.landing-help`, `.landing-help-links` | Tinted strip with links to Help, Privacy and About |
+
+```html
+<ul class="feature-grid">
+  <li class="feature">
+    <span class="feature-icon" aria-hidden="true"><?= pf_icon('edit') ?></span>
+    <h3 class="feature-title">Fill it in where you read it</h3>
+    <p class="feature-text">Every field saves on its own.</p>
+  </li>
+</ul>
+```
+
+The home page is public: use invented sample data only, never a real
+member, count, lab name or address.
 
 ## PHP helpers
 

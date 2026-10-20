@@ -474,8 +474,8 @@ require __DIR__ . '/../src/includes/header.php';
           $tTitle = count($tLines) === 2 && mb_strlen(trim($tLines[0]), 'UTF-8') <= 120 ? trim($tLines[0]) : 'Template ' . ($i + 1);
           $tBody  = $tTitle === trim($tLines[0]) && count($tLines) === 2 ? trim($tLines[1]) : trim((string)$t['body']); ?>
         <article class="card" x-data="{ editing: <?= $open ? 'true' : 'false' ?> }" aria-labelledby="tpl-<?= (int)$t['id'] ?>-h">
-          <div class="flex items-start justify-between gap-4">
-            <h2 class="card-title break-words" id="tpl-<?= (int)$t['id'] ?>-h"><?= e($tTitle) ?></h2>
+          <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <h2 class="card-title min-w-0 break-words" id="tpl-<?= (int)$t['id'] ?>-h"><?= e($tTitle) ?></h2>
             <div class="flex shrink-0 gap-1" x-show="!editing">
               <button type="button" class="btn btn-secondary btn-sm" x-copy data-copy="<?= e($t['body']) ?>"><?= pf_icon('copy') ?> Copy</button>
               <?php if ($canEdit): ?>

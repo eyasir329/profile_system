@@ -28,7 +28,7 @@
   }
 
   .nav-links {
-    @apply hidden h-full items-center gap-1 md:flex;
+    @apply hidden h-full items-center gap-1 lg:flex;
   }
   .nav-link {
     @apply relative flex h-10 items-center rounded-md px-3.5 text-[0.9375rem] font-semibold no-underline;
@@ -56,7 +56,7 @@
     @apply ml-auto flex items-center gap-2;
   }
   .nav-toggle {
-    @apply md:hidden;
+    @apply lg:hidden;
   }
   /* Ghost buttons and menu triggers sitting on the dark bar. */
   .navbar .btn-ghost,
@@ -87,9 +87,12 @@
     @apply border-white bg-white text-primary-900 hover:bg-primary-50;
   }
 
-  /* Small screens: the links drop down under the bar, still on the bar's colour. */
+  /* Below lg (phones and tablets): the links drop down under the bar, still
+     on the bar's colour. The admin bar (six links, search, role switcher,
+     account) does not fit a 768 px tablet, so every role switches at lg.
+     The drawer scrolls on its own when it is taller than the screen. */
   .nav-drawer {
-    @apply border-t px-4 pt-2 pb-4 md:hidden;
+    @apply max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t px-4 pt-2 pb-4 lg:hidden;
     border-color: oklch(1 0 0 / 0.14);
   }
   .nav-drawer a,
@@ -164,7 +167,7 @@
 
   /* ---- Side navigation: settings tabs, profile section list ---- */
   .side-nav {
-    @apply flex min-w-0 gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0;
+    @apply relative flex min-w-0 gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0;
     scrollbar-width: none;
   }
   .side-nav::-webkit-scrollbar {
@@ -225,7 +228,11 @@
     @apply text-muted-foreground-2 decoration-transparent hover:text-foreground hover:decoration-current;
   }
   .site-footer-links {
-    @apply flex flex-wrap gap-x-5 gap-y-1;
+    @apply flex flex-wrap gap-x-3 gap-y-1;
+  }
+  /* Padded so each link is a 24 px+ touch target (WCAG 2.5.8). */
+  .site-footer-links a {
+    @apply inline-flex min-h-8 items-center px-1;
   }
   .site-footer-links a[aria-current="page"] {
     @apply font-semibold text-foreground;

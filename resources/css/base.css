@@ -103,7 +103,7 @@
     @apply mt-1.5 max-w-[65ch] text-muted-foreground-2;
   }
   .back-link {
-    @apply mb-5 inline-flex items-center gap-1 text-sm text-muted-foreground-2 no-underline hover:text-foreground;
+    @apply mb-5 inline-flex min-h-6 items-center gap-1 text-sm text-muted-foreground-2 no-underline hover:text-foreground;
   }
 
   .muted {
@@ -115,5 +115,40 @@
 
   .icon {
     @apply inline-block size-4 shrink-0;
+  }
+}
+
+/* Safety net for the bug fixed in data.css (.table-wrap): a visually hidden
+   label is position: absolute, and inside a scroller that is not itself
+   positioned it keeps its place far to the right and stretches the page.
+   left: 0 puts it at the left edge of its containing block instead, which
+   is never wider than the page. Screen readers are unaffected. */
+@layer utilities {
+  .sr-only {
+    left: 0;
+  }
+}
+
+/* Grid and flex children default to min-width: auto, so one long word, URL
+   or table inside them makes the column wider than a phone screen. Reset it
+   for grid items with zero specificity: any min-w-* utility still wins. */
+@layer base {
+  :where(.grid) > * {
+    min-width: 0;
+  }
+  /* Long unbroken words (IDs, DOIs, URLs) wrap instead of overflowing. */
+  body {
+    overflow-wrap: break-word;
+  }
+}
+
+/* Touch screens: fingers need bigger targets than a mouse pointer. */
+@layer components {
+  @media (pointer: coarse) {
+    input[type="checkbox"],
+    input[type="radio"] {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
   }
 }

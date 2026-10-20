@@ -11,6 +11,39 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Responsive on every device, and a new home page
+
+Every page was opened for each role at nine screen sizes (320 to 1920 px,
+a phone in landscape, phones as touch devices) and checked for sideways
+scrolling, cut-off content and small tap targets. Found and fixed:
+
+- **Students sheet and every Resources table scrolled the whole page
+  sideways on phones** (by up to 2,500 px). The "Not set" screen-reader
+  labels in empty cells are absolutely positioned and escaped their
+  scroll frame. Every scroller is now `position: relative`, and `.sr-only`
+  gets `left: 0` as a safety net.
+- **The admin top bar did not fit a 768 px tablet** (60 px off screen on
+  every page). The full bar now starts at 1024 px for every role; phones
+  and tablets use the drawer, which scrolls when it is taller than the
+  screen.
+- **My profile was 427 px wide on a 320 px phone**: section and
+  publication tabs (same label bug) and the course row ("Mark as
+  completed" now wraps).
+- Teacher dashboard cards, Resources template buttons and the "Use my
+  computer's zone" button in Site settings overflowed on small phones.
+  Grid items now shrink (`min-width: 0`), button rows wrap, and long
+  unbroken words wrap everywhere.
+- Users, Emails and Activity tabs (`.view-tabs`) were cut off on phones;
+  they now wrap onto a second row.
+- Tap targets of at least 24 px: footer links, "Show as table", sortable
+  column headers, small links; 20 px checkboxes on touch screens.
+- **New home page**: a fluid headline that fits small phones, the sample
+  profile with its completion meter, what the system does, a card per
+  role, how to get an account, and links to Help and Privacy. Invented
+  sample data only: no member, count, lab name or address.
+- `tools/responsive-audit.js` repeats the check (accounts from the
+  environment); the rules are in `docs/FRONTEND.md` ("Responsive rules").
+
 ### Security: second audit (black-box and white-box)
 
 Full write-up in [`docs/SECURITY.md`](docs/SECURITY.md) §1.

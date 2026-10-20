@@ -262,7 +262,7 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
       <?php endif; ?>
       <?php if ($showSwitcher): ?>
         <!-- Role switcher: which of your roles this session is acting as. -->
-        <div class="menu-wrap max-md:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
+        <div class="menu-wrap max-lg:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
           <button type="button" class="menu-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="open.toString()" aria-expanded="false"
                   aria-label="Acting as <?= e(ucfirst($activeRole)) ?>. Switch role">
             <?= ui_role($activeRole) ?>
@@ -286,7 +286,7 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
       <?php endif; ?>
 
       <!-- Account menu -->
-      <div class="menu-wrap max-md:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
+      <div class="menu-wrap max-lg:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
         <button type="button" class="menu-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="open.toString()" aria-expanded="false">
           <?= ui_avatar(null, $myName, 'avatar-sm') ?>
           <span class="max-w-32 truncate"><?= e($myFirstName) ?></span>

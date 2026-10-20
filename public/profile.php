@@ -434,9 +434,9 @@ function render_course_history(array $courses): string
     }
     $html = '';
     foreach ($courses as $c) {
-        $html .= '<li class="flex items-center gap-3 border-b border-layer-line py-3" data-course-row>'
+        $html .= '<li class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-layer-line py-3" data-course-row>'
             . '<span class="badge">' . e($c['course']) . '</span>'
-            . '<span class="min-w-0 flex-1 text-sm text-muted-foreground-2">'
+            . '<span class="min-w-[10rem] flex-1 text-sm text-muted-foreground-2">'
             . ($c['enrolled'] !== '' ? 'Enrolled ' . e($c['enrolled']) : 'Enrolment date not set')
             . ($c['completed'] !== '' ? ' · Completed ' . e(date('F Y', strtotime($c['completed']))) : '') . '</span>';
         if (!$c['current'] && $c['completed'] !== '') {

@@ -190,7 +190,7 @@
     @apply mt-3 text-sm;
   }
   .chart-table summary {
-    @apply inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground-2 hover:text-foreground;
+    @apply inline-flex min-h-8 cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground-2 hover:text-foreground;
   }
   .chart-table .table-scroll {
     @apply mt-2 max-h-64 overflow-auto rounded-md border border-layer-line;

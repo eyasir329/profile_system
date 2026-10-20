@@ -296,7 +296,7 @@ $displayOrder = ['admin', 'teacher', 'student'];
         <div class="field">
           <label class="label" for="password">
             Password
-            <a class="ml-auto text-sm font-normal" href="<?= e(url_forgot()) ?>">Forgot password?</a>
+            <a class="ml-auto inline-flex min-h-6 items-center text-sm font-normal" href="<?= e(url_forgot()) ?>">Forgot password?</a>
           </label>
           <div class="password-field" x-data="{ show: false }">
             <input class="input" id="password" name="password" type="password" :type="show ? 'text' : 'password'" autocomplete="current-password" required

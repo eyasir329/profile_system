@@ -150,8 +150,8 @@ require __DIR__ . '/../../src/includes/header.php';
         </select>
         <?php if (isset($errors['timezone'])): ?><p class="field-error" id="tz-err" role="alert"><?= e($errors['timezone']) ?></p><?php endif; ?>
         <div class="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-secondary btn-sm" @click="useBrowser()" x-show="browser" x-cloak>
-            <?= pf_icon('swap') ?> <span x-text="'Use my computer’s zone (' + browser + ')'"></span></button>
+          <button type="button" class="btn btn-secondary btn-sm max-w-full" @click="useBrowser()" x-show="browser" x-cloak>
+            <?= pf_icon('swap') ?> <span class="truncate" x-text="'Use my computer’s zone (' + browser + ')'"></span></button>
           <?php foreach (['UTC', 'Asia/Tokyo', 'Asia/Dhaka'] as $quick): ?>
             <button type="button" class="btn btn-ghost btn-sm" @click="tz = '<?= e($quick) ?>'"><?= e($quick) ?></button>
           <?php endforeach; ?>

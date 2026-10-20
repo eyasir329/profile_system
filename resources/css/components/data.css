@@ -62,12 +62,16 @@
   }
 
   /* ---- Table ---- */
+  /* Every box that clips or scrolls is also position: relative. Otherwise
+     absolutely positioned children (the .sr-only "Not set" labels in empty
+     cells) take the page as their containing block, escape the clipping,
+     and stretch the whole page sideways to the table's full width. */
   .table-wrap {
-    @apply overflow-hidden rounded-lg border border-card-line bg-card;
+    @apply relative overflow-hidden rounded-lg border border-card-line bg-card;
     box-shadow: var(--panel-shadow);
   }
   .table-scroll {
-    @apply overflow-x-auto;
+    @apply relative overflow-x-auto;
   }
   .table {
     @apply w-full border-collapse text-left text-sm;
@@ -143,7 +147,7 @@
     @apply ml-auto;
   }
   .sheet-scroll {
-    @apply max-h-[70vh] overflow-auto outline-none;
+    @apply relative max-h-[70vh] overflow-auto outline-none;
   }
   .sheet-frame.is-full .sheet-scroll {
     @apply max-h-none flex-1;
@@ -222,7 +226,7 @@
   }
   /* Sheet tabs: the workbook's sheets, above the sheet table. */
   .sheet-tabs {
-    @apply mb-3 flex gap-1 overflow-x-auto border-b-2 border-layer-line;
+    @apply relative mb-3 flex gap-1 overflow-x-auto border-b-2 border-layer-line;
   }
   .sheet-tabs a {
     @apply -mb-0.5 border-b-[3px] border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground-2 no-underline hover:text-foreground;
@@ -274,13 +278,15 @@
    * a raised white tab with a blue count, so which group you are looking
    * at is never in doubt.
    */
+  /* On phones the tabs wrap onto a second row (each stretching to fill it)
+     rather than spilling past the screen edge. */
   .view-tabs {
-    @apply mb-4 flex w-full gap-1 rounded-lg border p-1 sm:inline-flex sm:w-auto;
+    @apply mb-4 flex w-full flex-wrap gap-1 rounded-lg border p-1 sm:inline-flex sm:w-auto sm:flex-nowrap;
     background: var(--tools);
     border-color: var(--tools-line);
   }
   .view-tabs a {
-    @apply flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-md border border-transparent px-2.5 text-sm font-semibold whitespace-nowrap text-muted-foreground-2 no-underline sm:flex-none sm:px-4;
+    @apply flex h-10 flex-auto items-center justify-center gap-2 rounded-md border border-transparent px-2.5 text-sm font-semibold whitespace-nowrap text-muted-foreground-2 no-underline sm:flex-none sm:px-4;
     transition: background-color 120ms, color 120ms, border-color 120ms;
   }
   .view-tabs a:hover {
@@ -338,7 +344,7 @@
     @apply ml-auto text-sm text-muted-foreground-2 tabular-nums;
   }
   .sheet th .sort-btn {
-    @apply inline-flex cursor-pointer items-center gap-1 text-left font-bold whitespace-pre-line text-inherit hover:text-primary;
+    @apply inline-flex min-h-6 cursor-pointer items-center gap-1 text-left font-bold whitespace-pre-line text-inherit hover:text-primary;
   }
 
   /* Filter chips: a row of small pill links with counts (Students: by course). */

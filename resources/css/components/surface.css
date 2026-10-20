@@ -29,7 +29,7 @@
     @apply mt-1 mb-5 max-w-[62ch] text-sm text-muted-foreground-2;
   }
   .card-link {
-    @apply text-sm font-medium;
+    @apply inline-flex min-h-6 items-center text-sm font-medium;
   }
   .card-danger {
     @apply border-danger-line;

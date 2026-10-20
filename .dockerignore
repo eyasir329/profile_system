@@ -55,3 +55,6 @@ docker/smoke.sh
 public/docker/
 cloudflared.log
 cloudflared.pid
+
+# Developer tools, not part of the app.
+tools/

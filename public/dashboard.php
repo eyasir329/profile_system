@@ -291,7 +291,7 @@ require __DIR__ . '/../src/includes/header.php';
             <ul class="mt-3">
               <?php foreach (array_slice($incomplete, 0, 6) as $x): ?>
                 <li class="flex items-center gap-3 border-b border-layer-line py-2.5 text-sm">
-                  <a class="min-w-0 flex-1 truncate" href="<?= e(url_students()) ?>?id=<?= $x['id'] ?>"><?= e($x['name']) ?></a>
+                  <a class="min-w-0 flex-1 truncate py-1" href="<?= e(url_students()) ?>?id=<?= $x['id'] ?>"><?= e($x['name']) ?></a>
                   <?php if ($x['course'] !== ''): ?><span class="badge"><?= e($x['course']) ?></span><?php endif; ?>
                   <span class="meter"><span class="progress"><span class="progress-bar" style="width: <?= $x['percent'] ?>%"></span></span><span class="meter-text"><?= $x['percent'] ?>%</span></span>
                 </li>
@@ -389,7 +389,7 @@ require __DIR__ . '/../src/includes/header.php';
                 <span class="badge badge-success">On</span>
               <?php else: ?>
                 <span class="badge">Off</span>
-                <a class="text-sm" href="<?= e(url_settings()) ?>?tab=security#two-factor">Turn on</a>
+                <a class="inline-flex min-h-6 items-center text-sm" href="<?= e(url_settings()) ?>?tab=security#two-factor">Turn on</a>
               <?php endif; ?>
             </dd>
           </div>

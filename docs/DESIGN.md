@@ -186,10 +186,15 @@ from Settings → Appearance) and puts `class="dark"` on `<html>`. For
   `.page` (reading and forms), `.page-wide` (profile editor, directory).
 - Every page starts with `.page-header`: title, one line of context, and
   the page's actions on the right.
-- The top bar is sticky. Below `md` the links, the role switcher and the
-  account actions collapse into one drawer.
+- The top bar is sticky. Below `lg` (phones and tablets) the links, the
+  role switcher and the account actions collapse into one drawer; search
+  stays on the bar as an icon.
 - Tables become a card list below `md`. The wide "full sheet" scrolls
   inside its frame with a pinned first column, and can go full screen.
+- Nothing ever makes the page itself scroll sideways, from 320 px up. The
+  rules that keep it so are in `FRONTEND.md` ("Responsive rules").
+- The public home page (`index.php`) shows only invented sample data:
+  no member names, counts, lab name or addresses.
 
 ## 6. Behaviour rules
 
