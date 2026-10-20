@@ -1,0 +1,159 @@
+/*
+ * Admin pages: the user page's summary panel and save bar, the Users bulk
+ * bar, the dashboard's "Needs attention" list, and the command palette in
+ * the top bar (Ctrl/⌘ + K).
+ */
+@layer components {
+  /* ---- One user: the summary beside the name (in the identity panel) ----
+     <dl class="completion user-summary"><div><dt>Last active</dt><dd>2 hours ago</dd></div></dl> */
+  .user-summary {
+    @apply grid gap-y-1.5 text-sm;
+  }
+  .user-summary > div {
+    @apply flex items-baseline justify-between gap-3;
+  }
+  .user-summary dt {
+    @apply text-muted-foreground-2;
+  }
+  .user-summary dd {
+    @apply flex items-center gap-1.5 text-right font-semibold;
+  }
+
+  /* A section that removes access: a red marker instead of the blue one. */
+  .section.is-danger > .section-head {
+    box-shadow: inset 4px 0 0 var(--danger);
+  }
+  .section.is-danger .section-title {
+    @apply text-danger;
+  }
+
+  /* ---- Save bar: stays in view at the bottom while a long form is edited ---- */
+  .save-bar {
+    @apply sticky bottom-0 z-20 mt-6 flex flex-wrap items-center justify-end gap-2 rounded-lg border border-card-line bg-card px-4 py-3;
+    box-shadow: 0 -4px 16px oklch(0.2 0.02 260 / 0.08);
+  }
+  .save-bar.is-dirty {
+    border-color: var(--primary);
+  }
+  .save-bar-note {
+    @apply mr-auto text-sm text-muted-foreground-2;
+  }
+  .save-bar.is-dirty .save-bar-note {
+    @apply font-medium text-foreground;
+  }
+
+  /* ---- Users: the bar shown while people are ticked ---- */
+  .bulk-bar {
+    @apply sticky top-[4.5rem] z-20 mb-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2;
+    background: var(--tools);
+    border-color: var(--primary);
+    box-shadow: var(--panel-shadow);
+  }
+  .bulk-bar-count {
+    @apply mr-2 text-sm;
+  }
+  .table tr.is-selected > * {
+    background: color-mix(in oklch, var(--primary) 7%, var(--card));
+  }
+  .table .pick-all,
+  .pick-one {
+    @apply size-4 cursor-pointer rounded-xs border bg-layer text-primary;
+    border-color: var(--color-line-4, var(--control-line));
+  }
+  .table .pick-all:checked,
+  .table .pick-all:indeterminate,
+  .pick-one:checked {
+    @apply border-transparent;
+    background-color: currentColor;
+  }
+
+  /* ---- Dashboard: Needs attention ---- */
+  .attention {
+    @apply flex flex-col;
+  }
+  .attention-item {
+    @apply flex items-center gap-3 border-b border-layer-line py-3 text-sm last:border-b-0;
+  }
+  .attention-icon {
+    @apply flex size-8 shrink-0 items-center justify-center rounded-md;
+    background: var(--tools);
+    color: var(--primary);
+  }
+  .attention-item.is-danger .attention-icon {
+    @apply bg-danger-soft text-danger;
+  }
+  .attention-item.is-warning .attention-icon {
+    @apply bg-warning-soft text-warning;
+  }
+
+  /* ---- Command palette ---- */
+  .palette-trigger {
+    @apply flex h-9 items-center gap-2 rounded-md border px-2.5 text-sm font-medium;
+    color: var(--appbar-fg);
+    border-color: var(--appbar-line, rgb(255 255 255 / 0.18));
+    background: transparent;
+  }
+  .palette-trigger:hover {
+    background: var(--appbar-hover, rgb(255 255 255 / 0.08));
+  }
+  .palette-kbd {
+    @apply rounded-sm border px-1.5 py-px text-[0.6875rem] font-semibold;
+    border-color: currentColor;
+    opacity: 0.7;
+  }
+  .palette-backdrop {
+    @apply fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh];
+    /* Touch: nothing outside the list scrolls, and the list does not hand
+       its scroll on to the page behind (see the palette component). */
+    touch-action: none;
+    overscroll-behavior: contain;
+    background: rgb(15 18 28 / 0.5);
+    backdrop-filter: blur(2px);
+  }
+  .palette {
+    @apply flex w-full max-w-xl flex-col overflow-hidden rounded-xl border text-foreground;
+    /* Fits the visible screen, also with the iPad keyboard up (--palette-vh is set by JS). */
+    max-height: calc(var(--palette-vh, 100dvh) - 12vh - 1.5rem);
+    background: var(--dropdown, var(--card));
+    border-color: var(--dropdown-line, var(--card-line));
+    box-shadow: var(--shadow-pop, 0 16px 48px rgb(0 0 0 / 0.25));
+  }
+  .palette-search {
+    @apply flex items-center gap-3 border-b border-layer-line px-4 text-muted-foreground-1;
+  }
+  .palette-search input {
+    @apply h-14 min-w-0 flex-1 border-0 bg-transparent p-0 text-base text-foreground outline-none focus:ring-0;
+  }
+  .palette-list {
+    @apply min-h-0 flex-1 overflow-y-auto p-2;
+    max-height: 60vh;
+    overscroll-behavior: contain;      /* at the top or bottom, stop: do not scroll the page */
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Short screens or keyboard up: start the panel near the top. */
+  @media (max-height: 40rem), (pointer: coarse) and (max-width: 48rem) {
+    .palette-backdrop {
+      @apply pt-4;
+    }
+    .palette {
+      max-height: calc(var(--palette-vh, 100dvh) - 2rem);
+    }
+  }
+  .palette-item {
+    @apply flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5;
+  }
+  .palette-item.is-active {
+    background: var(--tools);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+  .palette-kind {
+    @apply w-16 shrink-0 text-xs font-semibold text-muted-foreground-1;
+  }
+  .palette-empty {
+    @apply px-3 py-6 text-center text-sm text-muted-foreground-1;
+  }
+  .palette-foot {
+    @apply flex justify-between border-t border-layer-line px-4 py-2 text-xs text-muted-foreground-1;
+  }
+}

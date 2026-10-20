@@ -20,6 +20,7 @@ require_once __DIR__ . '/../src/includes/auth.php';
 require_once __DIR__ . '/../src/includes/db.php';
 require_once __DIR__ . '/../src/includes/url.php';
 require_once __DIR__ . '/../src/includes/validate.php';
+require_once __DIR__ . '/../src/includes/mail_templates.php';
 
 require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit; }
@@ -32,6 +33,10 @@ $pdo = auth_pdo();
 if ($action === 'disable') {
     $pdo->prepare('DELETE FROM two_factor WHERE user_id = :u')->execute(['u' => $userId]);
     $pdo->prepare('UPDATE users SET totp_required = 0 WHERE id = :u')->execute(['u' => $userId]);
+    log_activity($userId, 'two_factor_off', null);
+    $who = $pdo->prepare('SELECT name, email FROM users WHERE id = :u');
+    $who->execute(['u' => $userId]);
+    if ($w = $who->fetch()) { mail_two_factor_off((string)$w['email'], (string)$w['name']); }
     header('Location: ' . url_settings() . '?tab=security&totp_disabled=1');
     exit;
 }
@@ -45,17 +50,29 @@ if ($action === 'confirm') {
         header('Location: ' . url_settings() . '?tab=security&enroll=1&err=1#two-factor');
         exit;
     }
-    // Generate backup codes.
-    $codes = [];
-    for ($i = 0; $i < 10; $i++) {
-        $codes[] = strtoupper(bin2hex(random_bytes(4))); // 8 hex chars each
-    }
+    // Backup codes: stored hashed, shown once (settings.php reads them from
+    // the session and forgets them).
+    $codes = backup_codes_generate();
     $pdo->prepare('UPDATE two_factor SET enabled = 1, backup_codes = :bc WHERE user_id = :u')
-        ->execute(['bc' => json_encode($codes), 'u' => $userId]);
+        ->execute(['bc' => backup_codes_store($codes), 'u' => $userId]);
     $pdo->prepare('UPDATE users SET totp_required = 1 WHERE id = :u')
         ->execute(['u' => $userId]);
-    // The codes are read back from the DB by settings.php; keep them out of the URL.
+    log_activity($userId, 'two_factor_on', null);
+    $_SESSION['tf_new_codes'] = $codes;
     header('Location: ' . url_settings() . '?tab=security&totp_enabled=1#two-factor');
+    exit;
+}
+
+if ($action === 'regen_codes') {
+    // A fresh list replaces the old one, which stops working.
+    $codes = backup_codes_generate();
+    $upd = $pdo->prepare('UPDATE two_factor SET backup_codes = :bc WHERE user_id = :u AND enabled = 1');
+    $upd->execute(['bc' => backup_codes_store($codes), 'u' => $userId]);
+    if ($upd->rowCount() === 1) {
+        $_SESSION['tf_new_codes'] = $codes;
+        log_activity($userId, 'backup_codes_regenerated', null);
+    }
+    header('Location: ' . url_settings() . '?tab=security#two-factor');
     exit;
 }
 

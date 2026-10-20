@@ -116,33 +116,59 @@ function validate_select(string $value, array $options, string $fieldName): arra
 }
 
 /**
- * Log an activity event. Silently no-ops if the table doesn't exist yet
+ * Log an activity event, with the request's IP address, browser and the
+ * role being acted as (shown to admins in Admin › Activity; cleared after
+ * 90 days by housekeeping). Silently no-ops if the table doesn't exist yet
  * (e.g. during initial migration).
  */
 function log_activity(?int $userId, string $kind, ?string $detail = null): void
 {
     global $pdo;
+    $web = PHP_SAPI !== 'cli';
+    $ip  = $web && function_exists('client_ip') ? client_ip() : null;
+    $ua  = $web ? mb_substr(trim((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 255) : '';
+    $role = isset($_SESSION['user_role']) && is_string($_SESSION['user_role']) ? $_SESSION['user_role'] : null;
     try {
-        $st = $pdo->prepare('INSERT INTO activity (user_id, kind, detail) VALUES (:u, :k, :d)');
-        $st->execute(['u' => $userId, 'k' => $kind, 'd' => $detail]);
+        $st = $pdo->prepare('INSERT INTO activity (user_id, kind, detail, ip, user_agent, acting_role) VALUES (:u, :k, :d, :ip, :ua, :r)');
+        $st->execute(['u' => $userId, 'k' => $kind, 'd' => $detail, 'ip' => $ip, 'ua' => $ua !== '' ? $ua : null, 'r' => $role]);
     } catch (Throwable $e) {
-        // table might not exist yet; never break a request for logging
+        try {
+            // Before migration 035: the table has no context columns yet.
+            $pdo->prepare('INSERT INTO activity (user_id, kind, detail) VALUES (:u, :k, :d)')
+                ->execute(['u' => $userId, 'k' => $kind, 'd' => $detail]);
+        } catch (Throwable $e2) {
+            // table might not exist yet; never break a request for logging
+        }
     }
 }
 
 /**
- * Generate a base32-encoded random secret. Used for TOTP enrollment.
+ * A new TOTP secret: $bytes random bytes (20 = 160 bits, RFC 4226's
+ * recommendation), base32-encoded (RFC 4648, no padding). 20 bytes give the
+ * standard 32-character key every authenticator app accepts.
+ *
+ * Earlier versions made one character per byte, so a 20-character key that
+ * encodes 100 bits, not whole bytes: Google Authenticator rejects such keys
+ * as "Key value is invalid". totp_secret_is_standard() spots them.
  */
 function generate_totp_secret(int $bytes = 20): string
 {
-    // RFC 4648 base32 alphabet (no padding).
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    $bin = random_bytes($bytes);
+    $bits = '';
+    foreach (str_split(random_bytes($bytes)) as $b) {
+        $bits .= str_pad(decbin(ord($b)), 8, '0', STR_PAD_LEFT);
+    }
     $out = '';
-    foreach (str_split($bin) as $b) {
-        $out .= $alphabet[ord($b) % 32];
+    foreach (str_split($bits, 5) as $chunk) {
+        $out .= $alphabet[bindec(str_pad($chunk, 5, '0'))];
     }
     return $out;
+}
+
+/** Is this a key every authenticator app accepts (base32, whole bytes, at least 16 characters)? */
+function totp_secret_is_standard(string $secret): bool
+{
+    return (bool)preg_match('/^[A-Z2-7]{16,}$/', $secret) && strlen($secret) % 8 === 0;
 }
 
 /**

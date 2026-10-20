@@ -101,7 +101,14 @@ if [ -n "${APP_DB_USER}" ] && [ "${APP_DB_USER}" != "${DB_USER}" ]; then
     echo "[entrypoint] Ensuring application user '${APP_DB_USER}' exists on '${DB_NAME}'..."
     # CREATE USER IF NOT EXISTS is MariaDB 10.0.2+; safe on 11.x.
     db_exec "CREATE USER IF NOT EXISTS '${APP_DB_USER}'@'%' IDENTIFIED BY '${DB_APP_PASSWORD}';"
-    db_exec "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${APP_DB_USER}'@'%';"
+    # Keep the password in step with .env if it was changed there.
+    db_exec "ALTER USER '${APP_DB_USER}'@'%' IDENTIFIED BY '${DB_APP_PASSWORD}';"
+    # Rows only: the app never changes the schema (this script applies
+    # migrations as DB_USER). A bug in the app, such as SQL injection, then
+    # can't drop or alter tables, create routines or read other databases.
+    # REVOKE first so an older ALL PRIVILEGES grant is narrowed on upgrade.
+    db_exec "REVOKE ALL PRIVILEGES ON \`${DB_NAME}\`.* FROM '${APP_DB_USER}'@'%';" 2>/dev/null || true
+    db_exec "GRANT SELECT, INSERT, UPDATE, DELETE ON \`${DB_NAME}\`.* TO '${APP_DB_USER}'@'%';"
     db_exec "FLUSH PRIVILEGES;"
     echo "[entrypoint] Application user ready."
 fi
@@ -156,6 +163,14 @@ mkdir -p "${APP_DIR}/uploads/profiles"
 chown -R www-data:www-data "${APP_DIR}/uploads" 2>/dev/null || true
 
 echo "[entrypoint] Database ready. Starting Apache..."
+
+# Apache and PHP need only the app user's password. With a separate app
+# user, drop the operator (root) credentials from the environment Apache
+# inherits, so PHP code (getenv(), /proc/self/environ) never sees them.
+if [ -n "${APP_DB_USER}" ] && [ "${APP_DB_USER}" != "${DB_USER}" ]; then
+    export APP_DB_USER DB_APP_PASSWORD
+    unset DB_PASSWORD DB_USER MARIADB_ROOT_PASSWORD
+fi
 
 # exec so Apache becomes PID 1 and gets signals.
 exec "$@"

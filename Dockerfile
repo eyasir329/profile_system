@@ -40,6 +40,13 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
 # Apache modules.
 RUN a2enmod rewrite headers
 
+# Apache and PHP settings: error pages, no directory listings, no code in
+# uploads, no version headers, errors logged instead of shown.
+# "zz-" so it loads after the image's security.conf, which it overrides.
+COPY docker/apache/app.conf /etc/apache2/conf-available/zz-profile-system.conf
+RUN a2enconf zz-profile-system
+COPY docker/php/app.ini /usr/local/etc/php/conf.d/zz-profile-system.ini
+
 # Working directory. The whole project is copied to /var/www, but Apache's
 # doc root is /var/www/html. We sync the public/ tree into html/ below.
 WORKDIR /var/www
@@ -49,9 +56,14 @@ COPY . /var/www
 
 # Materialize the public/ tree as Apache's DocumentRoot, and stage the uploads
 # directory so the named volume can overlay it cleanly.
+# The code stays owned by root, so Apache (www-data) can read it but not
+# change it; only uploads/ is writable by the web server.
 RUN mkdir -p /var/www/html/uploads/profiles \
  && cp -r /var/www/public/. /var/www/html/ \
- && chown -R www-data:www-data /var/www/html /var/www/src /var/www/database
+ && rm -rf /var/www/html/docker \
+ && chown -R root:root /var/www/html /var/www/src /var/www/database \
+ && chmod -R a+rX,go-w /var/www/html /var/www/src /var/www/database \
+ && chown -R www-data:www-data /var/www/html/uploads
 
 # Entrypoint waits for DB, runs schema/migrations, then execs the CMD.
 COPY docker/web-entrypoint.sh /usr/local/bin/web-entrypoint.sh

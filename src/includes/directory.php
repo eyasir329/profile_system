@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 /**
- * People directory: the shared page behind
- *   /students.php      (teacher: students only, read-only)
- *   /admin/index.php   (admin: every user, with create / edit / delete)
+ * People directory: the page behind /students.php (teacher: students only,
+ * read-only). Admins have their own pages since the admin redesign
+ * (/admin/index.php and /admin/user.php); the "users" scope below is kept
+ * for compatibility but no page uses it.
  *
  * The including page does the access check and sets $DIR:
  *   scope     'students' | 'users'
@@ -12,22 +13,23 @@ declare(strict_types=1);
  *   title     page heading, e.g. 'Students'
  *   one, many nouns for counts, e.g. 'student', 'students'
  *
- * Three renderings, all from this file so they cannot drift apart:
- *   ?id=<id>      one person's full profile
- *   (default)     users scope: compact list of every account. Students
- *                 scope: the sheet
- *                 (teachers have no list view; ?view= is ignored there),
- *                 limited to the columns in $XLSX_COLUMNS
- *   ?view=sheet   every field of everyone in one wide table, with a
- *                 "Full screen" button (Alpine `sheet` in resources/js/ui.js)
+ * Each role gets only what its work needs, all from this file so the
+ * shared parts cannot drift apart:
+ *   ?id=<id>      one person's page
+ *   users scope (admin): a list of every account (roles, status, joined)
+ *                 with Edit. Account management only: no workbook sheet,
+ *                 no lab-details tracking.
+ *   students scope (teacher): the workbook sheet, the columns in
+ *                 $XLSX_COLUMNS, with Current / Completed tabs, course
+ *                 chips, CSV download and "Full screen" (Alpine `sheet` in
+ *                 resources/js/ui.js)
  *
- * Query params (list / sheet):
+ * Query params:
  *   q            — name / email / lab-field search
- *   sort, dir    — name | joined | complete, asc | desc
- *   users scope only:
- *   role         — 'admin' | 'teacher' | 'student'
- *   status       — 'active' | 'deactivated'
- *   course       — one of the profiles.course values
+ *   users scope:    sort, dir (name | joined, asc | desc),
+ *                   role ('admin' | 'teacher' | 'student'),
+ *                   status ('active' | 'deactivated')
+ *   students scope: group ('completed'), course, export ('csv')
  *
  * The students scope never lists deactivated accounts and has no forms
  * other than the filter. The users scope adds the admin actions, which
@@ -98,6 +100,7 @@ $doneMessages = [
     'deactivated' => 'Account deactivated. It can be restored for 30 days.',
     'restored'    => 'Account restored.',
     'deleted'     => 'User permanently deleted.',
+    '2fa_reset'   => 'Two-factor sign-in reset. They have been emailed.',
 ];
 if ($isAdmin && isset($_GET['done'], $doneMessages[(string)$_GET['done']])) {
     $flash[] = ['type' => 'success', 'body' => $doneMessages[(string)$_GET['done']]];
@@ -206,8 +209,9 @@ if (isset($_GET['id'])) {
         </dl>
       </section>
 
-      <?php // The publications/awards workbook: one section per sheet that has rows.
-      foreach (lab_entry_defs() as $eKey => $eDef):
+      <?php // The publications/awards workbook: one section per sheet that has
+      // rows. Teachers only: it is lab work, not part of the account.
+      foreach ($isAdmin ? [] : lab_entry_defs() as $eKey => $eDef):
           if ($eDef['sheet'] === null || empty($entries[$eKey])) { continue; } ?>
         <section class="section" aria-labelledby="stu-<?= e($eKey) ?>-h">
           <header class="section-head"><h2 class="section-title" id="stu-<?= e($eKey) ?>-h"><?= e($eDef['title']) ?> <span class="section-count"><?= count($entries[$eKey]) ?></span></h2></header>
@@ -257,26 +261,16 @@ if (isset($_GET['id'])) {
 $q      = trim((string)($_GET['q'] ?? ''));
 $roleFilter   = $isAdmin ? (string)($_GET['role'] ?? '') : '';
 $status = $isAdmin ? (string)($_GET['status'] ?? '') : '';
-$course = (string)($_GET['course'] ?? '');
+$course = $isAdmin ? '' : (string)($_GET['course'] ?? '');
 $sort   = (string)($_GET['sort'] ?? '');
 $dir    = strtolower((string)($_GET['dir'] ?? '')) === 'desc' ? 'desc' : 'asc';
 if ($sort === 'created') { $sort = 'joined'; }
-if (!in_array($sort, ['course', 'name', 'joined', 'complete'], true)) { $sort = ''; }
-// The students scope (teachers) is sheet-only: there is no list view and
-// no view switch. Admins can choose, and get the list by default.
-$sheetOnly = !$isAdmin;
-$view   = ($sheetOnly || (string)($_GET['view'] ?? '') === 'sheet') ? 'sheet' : 'list';
-// The sheet follows the workbook's order (by course) unless an admin picks
-// another sort; teachers always get the workbook's order.
-if ($sheetOnly || ($sort === '' && $view === 'sheet')) { $sort = 'course'; }
-if ($sort === '') { $sort = 'name'; }
+// Admins get the account list (sortable by name or joined date); teachers
+// get the sheet, always in the workbook's order (by course).
+$view = $isAdmin ? 'list' : 'sheet';
+$sort = $isAdmin ? (in_array($sort, ['name', 'joined'], true) ? $sort : 'name') : 'course';
 
 $where  = [$scopeWhere];
-// The sheet is the students' workbook, so for admins too it lists only
-// accounts that hold the student role. The list view shows everyone.
-if ($isAdmin && $view === 'sheet') {
-    $where[] = "EXISTS (SELECT 1 FROM user_roles sr WHERE sr.user_id = u.id AND sr.role = 'student')";
-}
 // The sheet is split in two tabs (?group=completed; anything else = current):
 //   current    students whose current course is not marked completed
 //   completed  one row per completed course, ever: the details frozen
@@ -298,10 +292,10 @@ $groupLink = function (string $g): string {
     return '?' . http_build_query(array_merge($qs, $g === 'completed' ? ['group' => 'completed'] : []));
 };
 $groupTabs = function (string $class = '') use ($group, $groupCounts, $groupLink): string {
-    $html = '<nav class="sheet-tabs' . $class . '" aria-label="Students">';
-    foreach (['current' => 'Current students', 'completed' => 'Completed'] as $g => $label) {
+    $html = '<nav class="view-tabs' . $class . '" aria-label="Students">';
+    foreach (['current' => ['users', 'Current students'], 'completed' => ['cap', 'Completed']] as $g => [$icon, $label]) {
         $html .= '<a href="' . e($groupLink($g)) . '"' . ($group === $g ? ' aria-current="page"' : '') . '>'
-            . e($label) . ' <span class="tab-count">' . ($groupCounts[$g] ?? 0) . '</span></a>';
+            . pf_icon($icon) . '<span>' . e($label) . '</span> <span class="view-tabs-count">' . ($groupCounts[$g] ?? 0) . '</span></a>';
     }
     return $html . '</nav>';
 };
@@ -328,15 +322,11 @@ if ($status === 'active') {
 } else {
     $status = '';
 }
-// Course filter. The list view filters in SQL; the sheet filters the rows
-// after they are built (below), so it also applies to the Completed tab's
-// frozen rows and can offer "none" (no course yet).
-if (!in_array($course, $COURSES, true) && !($course === 'none' && $view === 'sheet')) {
+// Course filter (sheet only). Applied to the rows after they are built
+// (below), so it also covers the Completed tab's frozen rows and can offer
+// "none" (no course yet).
+if (!in_array($course, $COURSES, true) && $course !== 'none') {
     $course = '';
-}
-if ($view === 'list' && $course !== '') {
-    $where[] = 'p.course = :course';
-    $params['course'] = $course;
 }
 
 $st = $pdo->prepare(
@@ -370,25 +360,13 @@ if ($view === 'sheet') {
     }
 }
 
-// Completeness is the share of lab fields filled in, as on each person's own profile.
-// Only students have lab details; for anyone else percent is null.
-foreach ($students as &$s) {
-    $s['percent'] = null;
-    if ($holdsStudent($s)) {
-        $steps        = profile_completion_steps($s);
-        $s['percent'] = (int)round(count(array_filter($steps, fn($x) => $x['done'])) / count($steps) * 100);
-    }
-}
-unset($s);
-
 // The workbook sheet lists people by their English name (falling back to
 // the account name), so "sort by name" follows the same value there.
-$sortName = fn(array $u): string => $sheetOnly && trim((string)($u['name_en'] ?? '')) !== ''
+$sortName = fn(array $u): string => !$isAdmin && trim((string)($u['name_en'] ?? '')) !== ''
     ? trim((string)$u['name_en']) : (string)$u['name'];
 usort($students, function (array $a, array $b) use ($sort, $dir, $sortName, $COURSE_ORDER): int {
     $cmp = match ($sort) {
         'joined'   => strcmp((string)$a['created_at'], (string)$b['created_at']),
-        'complete' => ($a['percent'] ?? -1) <=> ($b['percent'] ?? -1),
         'course'   => ($COURSE_ORDER[$a['course'] ?? ''] ?? 99) <=> ($COURSE_ORDER[$b['course'] ?? ''] ?? 99),
         default    => strcasecmp($sortName($a), $sortName($b)),
     };
@@ -399,10 +377,6 @@ $filtered = $q !== '' || $roleFilter !== '' || $status !== '' || $course !== '';
 
 /** One sheet cell: the value, or blank (as in the workbook) when it is empty. */
 $cell = fn(?string $v): string => trim((string)$v) !== '' ? e(trim((string)$v)) : '<span class="sr-only">Not set</span>';
-$viewLink = function (string $v): string {
-    $qs = array_diff_key($_GET, ['done' => 1]);
-    return '?' . http_build_query(array_merge($qs, ['view' => $v]));
-};
 $sortLink = function (string $key, string $label) use ($sort, $dir): string {
     $next = ($sort === $key && $dir === 'asc') ? 'desc' : 'asc';
     $qs   = array_diff_key($_GET, ['done' => 1]);
@@ -411,13 +385,14 @@ $sortLink = function (string $key, string $label) use ($sort, $dir): string {
     return '<a class="sort-link" href="' . e($href) . '">' . e($label) . $mark . '</a>';
 };
 $ariaSort = fn(string $key): string => $sort === $key ? ' aria-sort="' . ($dir === 'asc' ? 'ascending' : 'descending') . '"' : '';
-$clearUrl = $baseUrl . ($view === 'sheet' && !$sheetOnly ? '?view=sheet' : '');
+$clearUrl = $baseUrl;
 $noun     = fn(int $n): string => $n . ' ' . ($n === 1 ? $DIR['one'] : $DIR['many']);
 
 // Download the sheet as it is shown (tab, search and course filter), with
 // the workbook's column headers. UTF-8 with a BOM so Excel reads Japanese.
 if ($view === 'sheet' && ($_GET['export'] ?? '') === 'csv') {
     $file = 'students-' . $group . ($course !== '' ? '-' . $course : '') . '-' . date('Y-m-d') . '.csv';
+    log_activity(current_user_id(), 'students_export', 'group=' . $group . ($course !== '' ? ';course=' . $course : '') . ($q !== '' ? ';search' : ''));
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $file . '"');
     // A cell starting with = + - @ would run as a formula in Excel: make it text.
@@ -442,7 +417,7 @@ $courseLink = function (string $c): string {
 };
 // Teachers' sheet: the first four workbook columns (course, ID, both names)
 // stay at the left while scrolling sideways, like frozen panes in Excel.
-$FREEZE = $isAdmin ? [] : ['course' => 'freeze freeze-1', 'student_id' => 'freeze freeze-2', 'name_jp' => 'freeze freeze-3', 'name_en' => 'freeze freeze-4'];
+$FREEZE = ['course' => 'freeze freeze-1', 'student_id' => 'freeze freeze-2', 'name_jp' => 'freeze freeze-3', 'name_en' => 'freeze freeze-4'];
 
 $page_title = $DIR['title'];
 require __DIR__ . '/header.php';
@@ -456,22 +431,19 @@ require __DIR__ . '/header.php';
           <?= e($noun(count($students))) ?> of <?= $total ?> match your filters.
         <?php else: ?>
           <?php if ($view === 'sheet'): ?>
-            Everyone’s lab details, laid out like the lab’s workbook. Click a name for the full profile<?= $isAdmin ? '' : ', or download the sheet for Excel' ?>.
+            Everyone’s lab details, laid out like the lab’s workbook. Click a name for the full profile, or download the sheet for Excel.
           <?php else: ?>
             <?= e($noun($total)) ?>. Open a <?= e($DIR['one']) ?> to see their full profile.
           <?php endif; ?>
         <?php endif; ?>
       </p>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <?php if ($isAdmin): ?>
-        <a class="btn btn-secondary" href="<?= e(url_invites()) ?>"><?= pf_icon('link') ?> Invite by link</a>
-        <a class="btn btn-primary" href="<?= e(url_admin_user()) ?>"><?= pf_icon('plus') ?> New user</a>
-      <?php else: ?>
-        <a class="btn btn-primary" href="<?= e(url_invites()) ?>"><?= pf_icon('plus') ?> Invite students</a>
-      <?php endif; ?>
-    </div>
+    <?php if ($isAdmin): ?>
+      <a class="btn btn-primary" href="<?= e(url_admin_user()) ?>"><?= pf_icon('plus') ?> New user</a>
+    <?php endif; ?>
   </header>
+
+  <?php if ($view === 'sheet'): ?><?= $groupTabs() ?><?php endif; ?>
 
   <form method="get" class="toolbar" role="search" x-autosubmit>
     <div class="grow search-field">
@@ -491,17 +463,6 @@ require __DIR__ . '/header.php';
         </select>
       </div>
     <?php endif; ?>
-    <?php if ($isAdmin && $view === 'list'): ?>
-      <div>
-        <label class="sr-only" for="stu-course">Course</label>
-        <select class="select" id="stu-course" name="course">
-          <option value="">All courses</option>
-          <?php foreach ($COURSES as $c): ?>
-            <option value="<?= e($c) ?>"<?= $course === $c ? ' selected' : '' ?>><?= e($c) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-    <?php endif; ?>
     <?php if ($isAdmin): ?>
       <div>
         <label class="sr-only" for="stu-status">Status</label>
@@ -512,10 +473,9 @@ require __DIR__ . '/header.php';
         </select>
       </div>
     <?php endif; ?>
-    <?php if ($view === 'sheet' && !$sheetOnly): ?><input type="hidden" name="view" value="sheet"><?php endif; ?>
     <?php if ($group === 'completed'): ?><input type="hidden" name="group" value="completed"><?php endif; ?>
     <?php if ($view === 'sheet' && $course !== ''): ?><input type="hidden" name="course" value="<?= e($course) ?>"><?php endif; ?>
-    <?php if ($sort !== ($view === 'sheet' ? 'course' : 'name') || $dir !== 'asc'): ?>
+    <?php if ($isAdmin && ($sort !== 'name' || $dir !== 'asc')): ?>
       <input type="hidden" name="sort" value="<?= e($sort) ?>">
       <input type="hidden" name="dir" value="<?= e($dir) ?>">
     <?php endif; ?>
@@ -524,20 +484,13 @@ require __DIR__ . '/header.php';
 
     <div class="ml-auto flex items-center gap-2">
       <?php if ($view === 'sheet' && $students): ?>
-        <a class="btn btn-ghost btn-sm" href="<?= e($exportUrl) ?>" download><?= pf_icon('download') ?> Download CSV</a>
-        <button type="button" class="btn btn-ghost btn-sm" x-ref="enter" @click="set(true)"><?= pf_icon('expand') ?> Full screen</button>
-      <?php endif; ?>
-      <?php if (!$sheetOnly): ?>
-        <div class="segmented" role="group" aria-label="View">
-          <a href="<?= e($viewLink('list')) ?>"<?= $view === 'list' ? ' aria-current="true"' : '' ?>>All users</a>
-            <a href="<?= e($viewLink('sheet')) ?>"<?= $view === 'sheet' ? ' aria-current="true"' : '' ?>>Students sheet</a>
-        </div>
+        <a class="btn btn-secondary" href="<?= e($exportUrl) ?>" download><?= pf_icon('download') ?> Download CSV</a>
+        <button type="button" class="btn btn-secondary" x-ref="enter" @click="set(true)"><?= pf_icon('expand') ?> Full screen</button>
       <?php endif; ?>
     </div>
   </form>
 
   <?php if ($view === 'sheet'): ?>
-    <?= $groupTabs() ?>
     <?php if (count($courseCounts) > 1 || $course !== ''): ?>
       <nav class="filter-chips" aria-label="Filter by course">
         <span class="filter-chips-label">Course</span>
@@ -558,7 +511,7 @@ require __DIR__ . '/header.php';
   <?php elseif (!$students): ?>
     <div class="empty">
       <h2 class="empty-title"><?= $filtered ? 'No ' . e($DIR['many']) . ' match' : 'No ' . e($DIR['many']) . ' yet' ?></h2>
-      <p><?= $filtered ? 'Try a different search or clear the filters.' : ($isAdmin ? 'Create the first one with “New user”.' : 'Accounts with the student role will be listed here. Invite students to get started.') ?></p>
+      <p><?= $filtered ? 'Try a different search or clear the filters.' : ($isAdmin ? 'Create the first one with “New user”.' : 'Accounts with the student role will be listed here. Create an invitation link under Invitations to get started.') ?></p>
       <?php if ($filtered): ?><a class="btn btn-secondary" href="<?= e($clearUrl) ?>">Clear filters</a><?php endif; ?>
     </div>
 
@@ -572,24 +525,14 @@ require __DIR__ . '/header.php';
       </div>
       <div class="sheet-scroll" tabindex="0" role="region" aria-label="All <?= e($DIR['one']) ?> information" x-ref="scroll">
         <!-- The workbook's columns ("Information of Lab Students.xlsx"), in
-             its order. Admins also get the account columns in front. -->
+             its order. -->
         <table class="table sheet">
           <thead>
             <tr>
-              <?php if ($isAdmin): ?>
-                <th scope="col" class="pin"<?= $ariaSort('name') ?>><?= $sortLink('name', 'User') ?></th>
-                <th scope="col">Actions</th>
-                <th scope="col">Roles</th>
-                <th scope="col">Status</th>
-              <?php endif; ?>
               <?php foreach ($XLSX_COLUMNS as $key => [$heading, $class]): ?>
                 <th scope="col" class="whitespace-pre-line! <?= $FREEZE[$key] ?? '' ?>"><?= e($heading) ?></th>
               <?php endforeach; ?>
               <?php if ($group === 'completed'): ?><th scope="col">Completed</th><?php endif; ?>
-              <?php if ($isAdmin): ?>
-                <th scope="col"<?= $ariaSort('complete') ?>><?= $sortLink('complete', 'Filled in') ?></th>
-                <th scope="col"<?= $ariaSort('joined') ?>><?= $sortLink('joined', 'Joined') ?></th>
-              <?php endif; ?>
             </tr>
           </thead>
           <tbody>
@@ -598,22 +541,11 @@ require __DIR__ . '/header.php';
                 $startsGroup = $sort === 'course' && $prevCourse !== null && $courseOf($s) !== $prevCourse;
                 $prevCourse = $courseOf($s); ?>
               <tr<?= $startsGroup ? ' class="group-start"' : '' ?>>
-                <?php if ($isAdmin): ?>
-                  <th scope="row" class="pin nowrap">
-                    <a class="person" href="<?= e($baseUrl . '?id=' . (int)$s['id']) ?>">
-                      <?= $avatar($s, 'avatar-sm') ?>
-                      <span class="person-name"><?= e($s['name']) ?></span>
-                    </a>
-                  </th>
-                  <td class="nowrap"><a href="<?= e($editUrl((int)$s['id'])) ?>" aria-label="Edit <?= e($s['name']) ?>">Edit</a></td>
-                  <td class="nowrap"><?= $roleChips($s) ?></td>
-                  <td class="nowrap"><?= $statusBadge($s) ?></td>
-                <?php endif; ?>
                 <?php foreach ($XLSX_COLUMNS as $key => [$heading, $class]):
                     $value = trim((string)($s[$key] ?? ''));
                     $class .= isset($FREEZE[$key]) ? ' ' . $FREEZE[$key] : '';
                 ?>
-                  <?php if (!$isAdmin && $key === 'name_en'): ?>
+                  <?php if ($key === 'name_en'): ?>
                     <th scope="row" class="<?= $class ?>">
                       <a href="<?= e($baseUrl . '?id=' . (int)$s['id']) ?>"><?= e($value !== '' ? $value : (string)$s['name']) ?></a>
                     </th>
@@ -631,10 +563,6 @@ require __DIR__ . '/header.php';
                 <?php if ($group === 'completed'): ?>
                   <td class="nowrap num"><?= e(str_replace('-', '/', substr((string)$s['course_completed_at'], 0, 7))) ?></td>
                 <?php endif; ?>
-                <?php if ($isAdmin): ?>
-                  <td class="nowrap num"><?= $s['percent'] ?>%</td>
-                  <td class="nowrap"><?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?></td>
-                <?php endif; ?>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -650,11 +578,10 @@ require __DIR__ . '/header.php';
             <tr>
               <th scope="col"<?= $ariaSort('name') ?>><?= $sortLink('name', ucfirst($DIR['one'])) ?></th>
               <th scope="col">Contact</th>
-              <?php if ($isAdmin): ?><th scope="col">Roles</th><?php endif; ?>
-              <th scope="col">Course</th>
-              <th scope="col"<?= $ariaSort('complete') ?>><?= $sortLink('complete', 'Lab details') ?></th>
+              <th scope="col">Roles</th>
+              <th scope="col">Status</th>
               <th scope="col"<?= $ariaSort('joined') ?>><?= $sortLink('joined', 'Joined') ?></th>
-              <?php if ($isAdmin): ?><th scope="col" class="col-actions"><span class="sr-only">Actions</span></th><?php endif; ?>
+              <th scope="col" class="col-actions"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -677,33 +604,12 @@ require __DIR__ . '/header.php';
                 <td>
                   <a href="mailto:<?= e($s['email']) ?>"><?= e($s['email']) ?></a>
                 </td>
-                <?php if ($isAdmin): ?>
-                  <td>
-                    <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <?= $roleChips($s) ?>
-                      <?php if (!empty($s['deleted_at'])): ?><span class="badge badge-danger">Deactivated</span><?php endif; ?>
-                    </span>
-                  </td>
-                <?php endif; ?>
-                <?php if ($s['percent'] === null): ?>
-                  <td colspan="2"><span class="faint">Not a student</span></td>
-                <?php else: ?>
-                  <td class="nowrap">
-                    <?= trim((string)($s['course'] ?? '')) !== '' ? '<span class="badge">' . e($s['course']) . '</span>' : '<span class="faint">Not set</span>' ?>
-                  </td>
-                  <td>
-                    <span class="meter" title="<?= $s['percent'] ?>% of lab details filled in">
-                      <span class="progress"><span class="progress-bar" style="width: <?= $s['percent'] ?>%"></span></span>
-                      <span class="meter-text"><?= $s['percent'] ?>%</span>
-                    </span>
-                  </td>
-                <?php endif; ?>
+                <td><?= $roleChips($s) ?></td>
+                <td class="nowrap"><?= $statusBadge($s) ?></td>
                 <td class="nowrap"><?= e(date('M j, Y', strtotime((string)$s['created_at']))) ?></td>
-                <?php if ($isAdmin): ?>
-                  <td class="col-actions">
-                    <a class="btn btn-secondary btn-sm" href="<?= e($editUrl((int)$s['id'])) ?>" aria-label="Edit <?= e($s['name']) ?>">Edit</a>
-                  </td>
-                <?php endif; ?>
+                <td class="col-actions">
+                  <a class="btn btn-secondary btn-sm" href="<?= e($editUrl((int)$s['id'])) ?>" aria-label="Edit <?= e($s['name']) ?>">Edit</a>
+                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -722,16 +628,10 @@ require __DIR__ . '/header.php';
               </span>
             </a>
             <div class="card-list-meta">
-              <?php if ($s['percent'] !== null && trim((string)($s['course'] ?? '')) !== ''): ?><span class="badge"><?= e($s['course']) ?></span><?php endif; ?>
-              <?php if ($isAdmin): ?>
-                <?= $roleChips($s) ?>
-                <?php if (!empty($s['deleted_at'])): ?><span class="badge badge-danger">Deactivated</span><?php endif; ?>
-              <?php endif; ?>
-              <?php if ($s['percent'] !== null): ?><span class="ml-auto tabular-nums">Lab details <?= $s['percent'] ?>%</span><?php endif; ?>
+              <?= $roleChips($s) ?>
+              <?= $statusBadge($s) ?>
             </div>
-            <?php if ($isAdmin): ?>
-              <a class="btn btn-secondary btn-sm self-start" href="<?= e($editUrl((int)$s['id'])) ?>">Edit</a>
-            <?php endif; ?>
+            <a class="btn btn-secondary btn-sm self-start" href="<?= e($editUrl((int)$s['id'])) ?>">Edit</a>
           </li>
         <?php endforeach; ?>
       </ul>

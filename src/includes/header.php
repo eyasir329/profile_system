@@ -61,7 +61,9 @@ $displayOrder  = ['admin', 'teacher', 'student'];
  * Each role sees only what it works with:
  *   student  Dashboard, My profile (their lab details), Resources (read-only)
  *   teacher  Dashboard, Students (the sheet), Resources (edit), Invitations
- *   admin    Dashboard, Users, Resources (edit), Invitations
+ *   admin    Dashboard, Users, Invitations: account management only.
+ *            The Students sheet and Resources are teachers' work; an
+ *            admin who also teaches switches to Teacher for them.
  * Settings and Log out live in the account menu at the right end of the
  * bar, along with "My profile": lab details while acting as a student,
  * a plain account page (no lab details) while acting as teacher or admin.
@@ -81,8 +83,10 @@ $NAV_ITEMS_BY_ROLE = [
     'admin' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
         ['href' => 'admin',       'label' => 'Users',       'page' => 'admin'],
-        ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
         ['href' => 'invites',     'label' => 'Invitations', 'page' => 'invites'],
+        ['href' => 'emails',      'label' => 'Emails',      'page' => 'admin-emails'],
+        ['href' => 'activity',    'label' => 'Activity',    'page' => 'admin-activity'],
+        ['href' => 'site_settings', 'label' => 'Site settings', 'page' => 'admin-settings'],
     ],
 ];
 
@@ -97,6 +101,9 @@ $NAV_HREF_FOR = [
     'profile'   => 'url_profile',
     'settings'  => 'url_settings',
     'admin'     => 'url_admin',
+    'emails'    => 'url_admin_emails',
+    'activity'  => 'url_admin_activity',
+    'site_settings' => 'url_admin_settings',
     'invites'   => 'url_invites',
     'resources' => 'url_resources',
 ];
@@ -207,9 +214,55 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
     </nav>
 
     <div class="nav-end">
+      <?php if ($loggedIn && $activeRole === 'admin'):
+          // Command palette: jump to any page or person (Ctrl/⌘ + K). People come from /admin/search.php.
+          $paletteData = [
+              'search' => url_for('admin/search.php'),
+              'pages'  => [
+                  ['Dashboard', url_dashboard(), 'Overview and what needs attention'],
+                  ['Users', url_admin(), 'Every account'],
+                  ['New user', url_admin_user(), 'Create an account'],
+                  ['Invitations', url_invites(), 'Links to create an account'],
+                  ['Emails', url_admin_emails(), 'Everything the site sent'],
+                  ['Write an email', url_admin_emails() . '?view=compose', 'To people, a role or everyone'],
+                  ['Email settings', url_admin_emails() . '?view=settings', 'Switch each email on or off'],
+                  ['Activity', url_admin_activity(), 'What everyone has done'],
+                  ['People', url_admin_activity() . '?view=people', 'Last active, sign-ins and failures'],
+                  ['Failed sign-ins', url_admin_activity() . '?area=signin&q=failed', 'Recent wrong passwords and codes'],
+                  ['Site settings', url_admin_settings(), 'Time zone'],
+                  ['My settings', url_settings(), 'Your own name, password and two-factor'],
+              ],
+          ]; ?>
+        <div x-data="palette" data-palette="<?= e(json_encode($paletteData)) ?>" @keydown.window.prevent.ctrl.k="openIt()" @keydown.window.prevent.meta.k="openIt()">
+          <button type="button" class="palette-trigger" @click="openIt()" aria-haspopup="dialog" aria-label="Search pages and people (Ctrl+K)">
+            <?= pf_icon('search') ?><span class="max-lg:sr-only">Search</span><kbd class="palette-kbd max-lg:hidden">Ctrl K</kbd>
+          </button>
+          <div class="palette-backdrop" x-show="open" x-cloak x-transition.opacity @click.self="close()">
+            <div class="palette" role="dialog" aria-modal="true" aria-label="Search pages and people" @keydown.escape.prevent="close()">
+              <div class="palette-search">
+                <?= pf_icon('search') ?>
+                <input type="text" x-ref="input" x-model="q" @input.debounce.150ms="find()" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="go()"
+                       placeholder="Search pages and people…" aria-label="Search" role="combobox" aria-controls="palette-list" :aria-activedescendant="'pal-' + active" autocomplete="off">
+                <kbd class="palette-kbd">Esc</kbd>
+              </div>
+              <ul class="palette-list" id="palette-list" role="listbox">
+                <template x-for="(item, i) in items" :key="item.url + i">
+                  <li :id="'pal-' + i" role="option" :aria-selected="(i === active).toString()" class="palette-item" :class="i === active && 'is-active'"
+                      @mousemove="active = i" @click="go(i)" @touchstart.passive="tapStart($event)" @touchend="tapEnd($event, i)">
+                    <span class="palette-kind" x-text="item.kind"></span>
+                    <span class="min-w-0 flex-1"><span class="block truncate font-semibold" x-text="item.title"></span><span class="block truncate text-xs text-muted-foreground-1" x-text="item.sub"></span></span>
+                  </li>
+                </template>
+                <li class="palette-empty" x-show="!items.length && !busy">Nothing found for “<span x-text="q"></span>”.</li>
+              </ul>
+              <p class="palette-foot"><span>↑ ↓ to move · Enter to open</span><span x-show="busy">Searching…</span></p>
+            </div>
+          </div>
+        </div>
+      <?php endif; ?>
       <?php if ($showSwitcher): ?>
         <!-- Role switcher: which of your roles this session is acting as. -->
-        <div class="menu-wrap max-md:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
+        <div class="menu-wrap max-lg:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
           <button type="button" class="menu-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="open.toString()" aria-expanded="false"
                   aria-label="Acting as <?= e(ucfirst($activeRole)) ?>. Switch role">
             <?= ui_role($activeRole) ?>
@@ -233,7 +286,7 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
       <?php endif; ?>
 
       <!-- Account menu -->
-      <div class="menu-wrap max-md:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
+      <div class="menu-wrap max-lg:hidden" x-data="dropdown" @keydown.escape.stop="close(true)" @click.outside="close()" @focusout="focusLeft($event)">
         <button type="button" class="menu-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="open.toString()" aria-expanded="false">
           <?= ui_avatar(null, $myName, 'avatar-sm') ?>
           <span class="max-w-32 truncate"><?= e($myFirstName) ?></span>
@@ -242,7 +295,9 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
         <div class="menu" role="menu" aria-label="Account" x-ref="menu" x-show="open" x-cloak x-transition.opacity.duration.100ms
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)">
           <p class="menu-label truncate"><?= e($myName) ?></p>
-          <a class="menu-item" role="menuitem" href="<?= e(url_profile()) ?>"><?= pf_icon('user') ?> My profile</a>
+          <?php if ($activeRole !== 'student'): ?>
+            <a class="menu-item" role="menuitem" href="<?= e(url_profile()) ?>"><?= pf_icon('user') ?> My profile</a>
+          <?php endif; ?>
           <a class="menu-item" role="menuitem" href="<?= e(url_settings()) ?>"><?= pf_icon('settings') ?> Settings</a>
           <div class="menu-sep" role="separator"></div>
           <form method="post" action="<?= e(url_logout()) ?>">

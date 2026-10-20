@@ -5,7 +5,8 @@
  * Route:  GET /students.php               every field of every student in one wide table
  *                                         (sheet only: there is no list view here)
  *         GET /students.php?id=<id>       one student's full profile
- * Auth:   require_login(); the ACTIVE role must be teacher (or admin).
+ * Auth:   require_login(); the ACTIVE role must be teacher. Admins manage
+ *         accounts on /admin/ and have no Students sheet.
  *
  * Lists every active user who holds the student role. The page itself is
  * rendered by src/includes/directory.php (shared with /admin/index.php);
@@ -21,22 +22,9 @@ ensure_active_role_valid();
 
 $page_id = 'students';
 
-if (!in_array(active_user_role(), ['teacher', 'admin'], true)) {
-    http_response_code(403);
-    $page_title = 'Students';
-    require __DIR__ . '/../src/includes/header.php';
-    ?>
-    <div class="page-narrow">
-      <section class="card">
-        <h1 class="page-title text-2xl">Teachers only</h1>
-        <p class="page-desc">The student directory is available while you are acting as a teacher.
-          <?= has_role('teacher') ? 'Use the role switcher in the top bar to switch to Teacher.' : 'Your account does not have the teacher role.' ?></p>
-        <a class="btn btn-primary mt-6" href="<?= e(url_dashboard()) ?>">Back to dashboard</a>
-      </section>
-    </div>
-    <?php
-    require __DIR__ . '/../src/includes/footer.php';
-    exit;
+if (active_user_role() !== 'teacher') {
+    require_once __DIR__ . '/../src/includes/error_page.php';
+    render_error_page(403, 'The Students sheet is for teachers.');
 }
 
 $DIR = [

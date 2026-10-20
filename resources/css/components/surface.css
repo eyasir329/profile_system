@@ -9,12 +9,18 @@
 @layer components {
   .card {
     @apply rounded-lg border border-card-line bg-card p-5 sm:p-6;
+    box-shadow: var(--panel-shadow);
   }
   .card + .card {
     @apply mt-5;
   }
+  /* A header strip across the top of the card, ruled off from its body. */
   .card-head {
-    @apply mb-4 flex items-baseline justify-between gap-4;
+    @apply -mx-5 -mt-5 mb-5 flex items-center justify-between gap-4 rounded-t-lg border-b border-card-line px-5 py-3.5 sm:-mx-6 sm:-mt-6 sm:px-6;
+    background: var(--card-head);
+  }
+  .card-head .card-title {
+    @apply text-base;
   }
   .card-title {
     @apply flex flex-wrap items-center gap-2 text-lg leading-snug font-bold;
@@ -23,7 +29,7 @@
     @apply mt-1 mb-5 max-w-[62ch] text-sm text-muted-foreground-2;
   }
   .card-link {
-    @apply text-sm font-medium;
+    @apply inline-flex min-h-6 items-center text-sm font-medium;
   }
   .card-danger {
     @apply border-danger-line;
@@ -32,11 +38,33 @@
     @apply text-danger;
   }
 
+  /*
+   * On the profile pages every section is its own white panel with a grey
+   * header strip and a blue marker, so where one part ends and the next
+   * begins is never in doubt.
+   */
   .section {
-    @apply mt-10 scroll-mt-24 first:mt-0;
+    @apply mt-6 scroll-mt-24 rounded-lg border border-card-line bg-card px-5 pb-4 first:mt-0 sm:px-6;
+    box-shadow: var(--panel-shadow);
+  }
+  .section > .section-head {
+    @apply -mx-5 mb-0 items-center rounded-t-lg border-b-0 px-5 py-3.5 sm:-mx-6 sm:px-6;
+    background: var(--card-head);
+    border-bottom: 1px solid var(--card-line);
+    box-shadow: inset 4px 0 0 var(--primary);
+  }
+  .section > .section-head .section-title {
+    @apply text-lg;
+  }
+  /* The last row of a panel needs no rule under it: the panel edge is the rule. */
+  .section .value-card:last-child,
+  .section .entry:last-child,
+  .section .facts > div:last-child,
+  .section ul > li:last-child {
+    @apply border-b-0;
   }
   .section-head {
-    @apply mb-1 flex items-end justify-between gap-4 border-b border-layer-line pb-3;
+    @apply mb-1 flex items-end justify-between gap-4 border-b-2 border-layer-line pb-3;
   }
   .section-title {
     @apply flex flex-wrap items-baseline gap-x-2.5 text-xl leading-snug font-bold;
@@ -62,15 +90,82 @@
     @apply mt-0.5 text-sm text-muted-foreground-2;
   }
 
+  /* ---- Reading text inside a panel (About, Help, Privacy) ---- */
+  .doc {
+    @apply pt-4 leading-relaxed;
+  }
+  .doc > * + * {
+    @apply mt-3;
+  }
+  .doc ul {
+    @apply list-disc space-y-2 pl-5 marker:text-primary;
+  }
+
+  /* ---- Help: questions that open to show the answer ---- */
+  .faq {
+    @apply divide-y divide-layer-line;
+  }
+  .faq summary {
+    @apply flex cursor-pointer list-none items-center justify-between gap-4 py-3.5 font-semibold text-foreground select-none hover:text-primary;
+  }
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq .faq-caret {
+    @apply shrink-0 text-muted-foreground-1;
+    transition: transform 150ms;
+  }
+  .faq details[open] > summary {
+    @apply text-primary;
+  }
+  .faq details[open] .faq-caret {
+    @apply text-primary;
+    transform: rotate(180deg);
+  }
+  .faq .doc {
+    @apply max-w-[65ch] pt-0 pb-4 text-muted-foreground-2;
+  }
+
+  /* A tinted box inside a card for something to act on now (new backup codes). */
+  .panel-tint {
+    @apply rounded-lg border p-4;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+
+  /* ---- Error pages (src/includes/error_page.php) ---- */
+  .error-card {
+    @apply mt-4 sm:mt-10;
+  }
+  .error-code {
+    @apply mb-3 inline-flex rounded-md border px-2 py-0.5 text-xs font-bold tracking-wider uppercase tabular-nums text-primary;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  .error-actions {
+    @apply mt-6 flex flex-wrap gap-2;
+  }
+  .error-help {
+    @apply mt-6 border-t border-layer-line pt-4 text-sm text-muted-foreground-2;
+  }
+
   /* ---- Tiles: a grid of link cards, each with a live number (dashboard) ---- */
   .tile-grid {
     @apply grid gap-3 sm:grid-cols-2;
   }
+  /* An odd tile out takes the whole last row instead of leaving a hole. */
+  .tile-grid > :last-child:nth-child(odd) {
+    @apply sm:col-span-full;
+  }
   .tile {
     @apply flex items-center gap-3.5 rounded-lg border border-card-line bg-card p-4 text-foreground no-underline hover:border-primary hover:bg-layer-hover;
+    box-shadow: var(--panel-shadow);
+    transition: border-color 120ms, background-color 120ms;
   }
   .tile-icon {
-    @apply flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-primary;
+    @apply flex size-10 shrink-0 items-center justify-center rounded-md text-primary;
+    background: var(--tools);
+    box-shadow: inset 0 0 0 1px var(--tools-line);
   }
   .tile-title {
     @apply block text-[0.9375rem] leading-snug font-bold;

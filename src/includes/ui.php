@@ -49,6 +49,7 @@ function pf_icon(string $name, string $class = ''): string
         'info'     => '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5v.01"/>',
         'mail'     => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>',
         'dot'      => '<circle cx="12" cy="12" r="2"/>',
+        'pulse'    => '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
         'expand'   => '<path d="M9 4H4v5"/><path d="M15 4h5v5"/><path d="M9 20H4v-5"/><path d="M15 20h5v-5"/>',
         'collapse' => '<path d="M4 9h5V4"/><path d="M20 9h-5V4"/><path d="M4 15h5v5"/><path d="M20 15h-5v5"/>',
     ];
@@ -185,11 +186,12 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
         case 'admin_user_deactivate':
             return ['user', 'Deactivated a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
         case 'admin_user_restore':
-            return ['user', 'Restored a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+            return ['user', 'Restored a user' . ($detail !== '' ? ' (' . str_replace(';bulk', ', with others', $detail) . ')' : '')];
         case 'admin_user_delete':
             return ['trash', 'Deleted a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
         case 'resources_update':
             if ($count > 1) { return ['edit', 'Made ' . $count . ' changes to lab resources']; }
+            // Taking journals was removed (migration 031); older log rows still use these.
             if ($detail === 'take_journal')    { return ['check', 'Took a potential journal']; }
             if ($detail === 'release_journal') { return ['edit', 'Released a potential journal']; }
             if ($detail === 'publish_journal')   { return ['check', 'Marked a journal submission as published']; }
@@ -199,6 +201,171 @@ function ui_activity(string $kind, ?string $detail, int $count = 1): array
             return ['edit', $verb . ' ' . $what . ' in lab resources'];
         case 'role_change':
             return ['shield', 'Your role was changed' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'backup_code_used':
+            return ['shield', 'Signed in with a backup code'];
+        case 'backup_codes_regenerated':
+            return ['shield', 'Made new backup codes'];
+        case 'two_factor_reset':
+            return ['shield', 'Two-factor sign-in was reset by an admin'];
+        case 'admin_2fa_reset':
+            return ['shield', 'Reset two-factor for a user' . ($detail !== '' ? ' (' . $detail . ')' : '')];
+        case 'email_change_requested':
+            return ['mail', 'Asked to change your sign-in email'];
+        case 'login_failed':
+            return ['lock', $count > 1 ? $count . ' failed sign-in attempts' : 'Failed sign-in attempt'];
+        case 'logout':
+            return ['logout', 'Signed out'];
+        case 'two_factor_on':
+            return ['shield', 'Turned on two-factor sign-in'];
+        case 'two_factor_off':
+            return ['shield', 'Turned off two-factor sign-in'];
+        case 'login_2fa_failed':
+            return ['lock', $count > 1 ? $count . ' wrong two-factor codes' : 'Wrong two-factor code'];
+        case 'login_2fa_locked':
+            return ['lock', 'Two-factor sign-in locked after too many wrong codes'];
+        case 'account_restore':
+            return ['user', 'Restored your account'];
+        case 'students_export':
+            return ['download', 'Downloaded the Students sheet'];
     }
     return ['dot', ucfirst(str_replace('_', ' ', $kind))];
+}
+
+/** Activity kinds by area, for the filters on Admin › Activity. */
+const ACTIVITY_GROUPS = [
+    'signin'    => ['Sign-ins', ['login', 'login_failed', 'login_password_ok', 'login_2fa_failed', 'login_2fa_locked', 'logout',
+                                 'role_switch', 'role_fallback', 'backup_code_used']],
+    'security'  => ['Security', ['password_change', 'password_reset', 'password_reset_requested', 'backup_codes_regenerated',
+                                 'two_factor_on', 'two_factor_off',
+                                 'two_factor_reset', 'forgot_password_throttled', 'register_throttled']],
+    'account'   => ['Account', ['register', 'account_update', 'theme_update', 'email_change_requested', 'account_deactivate', 'account_restore']],
+    'profile'   => ['Profile & lab', ['profile_update', 'lab_update_denied', 'lab_fields_update', 'lab_xlsx_upload']],
+    'resources' => ['Resources', ['resources_update']],
+    'invites'   => ['Invitations', ['invite_create', 'invite_revoke']],
+    'admin'     => ['Admin actions', ['admin_user_create', 'admin_user_update', 'admin_user_deactivate', 'admin_user_restore',
+                                      'admin_user_delete', 'admin_2fa_reset', 'role_change', 'admin_email_send',
+                                      'admin_email_resend', 'admin_email_settings', 'admin_site_settings',
+                                      'admin_password_link', 'admin_signout_all']],
+    'exports'   => ['Downloads', ['students_export', 'admin_activity_export', 'admin_users_export']],
+];
+
+/** The ACTIVITY_GROUPS key a kind belongs to ('other' if none). */
+function activity_group_of(string $kind): string
+{
+    foreach (ACTIVITY_GROUPS as $g => [, $kinds]) {
+        if (in_array($kind, $kinds, true)) { return $g; }
+    }
+    return 'other';
+}
+
+/**
+ * One activity row as an admin reads it: [icon, sentence, tone], in the third
+ * person ("Updated their lab details"). tone is '' or 'danger' / 'warning'
+ * for events worth a second look. Falls back to ui_activity().
+ */
+function ui_activity_admin(string $kind, ?string $detail): array
+{
+    $detail = trim((string)$detail);
+    $kv = [];
+    foreach (explode(';', $detail) as $part) {
+        if (str_contains($part, '=')) { [$k, $v] = explode('=', $part, 2); $kv[$k] = $v; }
+    }
+    switch ($kind) {
+        case 'login_failed':
+            return ['lock', 'Failed sign-in' . (!empty($kv['email']) ? ' as ' . $kv['email'] : ''), 'danger'];
+        case 'login':
+            [$role, $how] = array_pad(explode(';', $detail, 2), 2, '');
+            return ['login', 'Signed in' . ($role !== '' ? ' as ' . $role : '') . ($how === '2fa' ? ' (with two-factor)' : ''), ''];
+        case 'role_fallback':
+            return ['swap', 'Was moved to another role (' . str_replace('->', ' → ', $detail) . ') because a role was removed', ''];
+        case 'password_reset_requested':
+            return ['lock', $detail === 'no_match' ? 'Someone asked to reset the password of an address with no account' : 'Asked for a password reset link', $detail === 'no_match' ? 'warning' : ''];
+        case 'forgot_password_throttled':
+            return ['alert', 'Too many password reset requests; blocked for a while', 'warning'];
+        case 'register_throttled':
+            return ['alert', 'Too many sign-up attempts; blocked for a while', 'warning'];
+        case 'lab_update_denied':
+            return ['alert', 'Tried to change a lab field only admins may set' . ($detail !== '' ? ' (' . $detail . ')' : ''), 'warning'];
+        case 'account_deactivate':
+            return ['user', 'Deactivated their own account', 'warning'];
+        case 'account_update':
+            return ['user', 'Updated their account details' . ($detail !== '' ? ' (' . $detail . ')' : ''), ''];
+        case 'profile_update':
+            return ['edit', str_starts_with($detail, 'lab:') ? 'Updated their lab details (' . substr($detail, 4) . ')' : 'Updated their profile', ''];
+        case 'password_reset':
+            return ['lock', 'Reset their password with an emailed link', ''];
+        case 'admin_user_delete':
+            return ['trash', 'Deleted a user' . ($detail !== '' ? ' (' . $detail . ')' : ''), 'danger'];
+        case 'admin_user_deactivate':
+            return ['user', 'Deactivated a user' . ($detail !== '' ? ' (' . str_replace(';bulk', ', with others', $detail) . ')' : ''), 'warning'];
+        case 'admin_2fa_reset':
+            return ['shield', 'Reset two-factor for a user' . ($detail !== '' ? ' (' . $detail . ')' : ''), 'warning'];
+        case 'admin_email_send':
+            return ['mail', 'Sent a custom email to ' . ($kv['recipients'] ?? '?') . ' ' . (($kv['recipients'] ?? '') === '1' ? 'person' : 'people')
+                . (!empty($kv['failed']) ? ' (' . $kv['failed'] . ' failed)' : ''), ''];
+        // Older kinds, from before the lab sheet moved into the profile.
+        case 'lab_fields_update':
+            return ['edit', 'Updated lab details' . ($detail !== '' ? ' of ' . $detail : ''), ''];
+        case 'lab_xlsx_upload':
+            return ['download', 'Uploaded a lab spreadsheet', ''];
+        case 'admin_password_link':
+            return ['mail', 'Emailed a password reset link' . ($kv === [] && $detail !== '' ? ' to ' . explode(';', $detail)[0] : '') . (str_contains($detail, ';failed') ? ' (not sent)' : ''), str_contains($detail, ';failed') ? 'warning' : ''];
+        case 'admin_signout_all':
+            return ['logout', 'Signed a user out everywhere' . ($detail !== '' ? ' (' . $detail . ')' : ''), 'warning'];
+        case 'admin_users_export':
+            return ['download', 'Downloaded the user list (CSV' . (str_contains($detail, 'filtered') ? ', filtered' : '') . ')', ''];
+        case 'admin_site_settings':
+            if (str_starts_with($detail, 'activity_days=')) {
+                $keepD = (int)($kv['activity_days'] ?? 0);
+                return ['settings', 'Set activity to be kept ' . ($keepD ? 'for ' . $keepD . ' days' : 'forever') . ' (IP and browser ' . (int)($kv['ip_days'] ?? 90) . ' days)'
+                    . (!empty($kv['deleted']) ? '; ' . $kv['deleted'] . ' old events deleted' : ''), !empty($kv['deleted']) ? 'warning' : ''];
+            }
+            return ['settings', str_starts_with($detail, 'timezone=') ? 'Changed the site time zone (' . str_replace('->', ' → ', substr($detail, 9)) . ')' : 'Changed site settings', 'warning'];
+        case 'login_password_ok':
+            return ['login', 'Entered the right password; asked for the two-factor code', ''];
+        case 'login_2fa_failed':
+            return ['lock', 'Entered a wrong two-factor code', 'danger'];
+        case 'login_2fa_locked':
+            return ['lock', 'Locked out after too many wrong two-factor codes', 'danger'];
+        case 'two_factor_off':
+            return ['shield', 'Turned off two-factor sign-in', 'warning'];
+        case 'students_export':
+            return ['download', 'Downloaded the Students sheet (' . (($kv['group'] ?? '') === 'completed' ? 'completed' : 'current') . (!empty($kv['course']) ? ', ' . $kv['course'] : '') . (str_contains($detail, 'search') ? ', filtered' : '') . ')', ''];
+        case 'admin_activity_export':
+            return ['download', 'Downloaded the activity log (CSV)', ''];
+        case 'admin_email_resend':
+            return ['mail', 'Sent a custom email again', ''];
+        case 'admin_email_settings':
+            $offs = array_keys(array_filter($kv, fn($v) => $v === '0'));
+            return ['settings', 'Changed email settings' . ($offs ? ' (turned off: ' . implode(', ', array_map(fn($n) => str_replace(['mail.type.', 'mail.'], '', $n), $offs)) . ')' : ''), $offs ? 'warning' : ''];
+    }
+    [$icon, $text] = ui_activity($kind, $detail);
+    $text = str_replace([' your ', 'Your '], [' their ', 'Their '], $text . ' ');
+    return [$icon, rtrim($text), ''];
+}
+
+/** "Chrome on Windows" from a User-Agent string, or '' when unknown. */
+function ui_device(?string $ua): string
+{
+    $ua = (string)$ua;
+    if ($ua === '') { return ''; }
+    $browser = match (true) {
+        str_contains($ua, 'Edg/')                                => 'Edge',
+        str_contains($ua, 'OPR/') || str_contains($ua, 'Opera')  => 'Opera',
+        str_contains($ua, 'Firefox/')                            => 'Firefox',
+        str_contains($ua, 'Chrome/') || str_contains($ua, 'CriOS') => 'Chrome',
+        str_contains($ua, 'Safari/')                             => 'Safari',
+        str_contains($ua, 'curl') || str_contains($ua, 'python') || str_contains($ua, 'bot') => 'Script or bot',
+        default                                                  => 'Browser',
+    };
+    $os = match (true) {
+        str_contains($ua, 'iPhone') || str_contains($ua, 'iPad') => 'iOS',
+        str_contains($ua, 'Android')                             => 'Android',
+        str_contains($ua, 'Windows')                             => 'Windows',
+        str_contains($ua, 'Mac OS X') || str_contains($ua, 'Macintosh') => 'macOS',
+        str_contains($ua, 'CrOS')                                => 'ChromeOS',
+        str_contains($ua, 'Linux')                               => 'Linux',
+        default                                                  => '',
+    };
+    return $browser . ($os !== '' ? ' on ' . $os : '');
 }

@@ -92,10 +92,40 @@
   --primary-active: var(--color-primary-900);
   --primary-checked: var(--color-primary-700);
 
-  /* The page is paper; cards and inputs sit on it in white. */
-  --background: var(--color-gray-50);
+  /* The page is a light grey; cards, tables and inputs sit on it in white,
+     so every block has a visible edge. */
+  --background: oklch(0.955 0.005 80);
   --background-1: var(--color-gray-100);
   --foreground: var(--color-gray-900);
+
+  /* Edges. Preline's gray-200 hairline almost vanishes against the page;
+     panels use gray-300, and controls (inputs, buttons) a line that meets
+     WCAG 1.4.11's 3:1 against white. */
+  --layer-line: var(--color-gray-300);
+  --card-line: var(--color-gray-300);
+  --table-line: var(--color-gray-200);
+  --border: var(--color-gray-300);
+  --control-line: oklch(0.66 0.01 70);
+  --muted: var(--color-gray-100);
+  --panel-shadow: 0 1px 2px oklch(0.2 0.01 60 / 0.07);
+
+  /* App bar: solid ink blue, so navigation never blends into the page. */
+  --appbar: var(--color-primary-900);
+  --appbar-line: var(--color-primary-950);
+  --appbar-fg: oklch(1 0 0);
+  --appbar-fg-muted: oklch(0.86 0.03 258);
+  --appbar-hover: oklch(1 0 0 / 0.1);
+  --appbar-active: oklch(1 0 0 / 0.16);
+  --appbar-accent: oklch(0.83 0.12 82);
+
+  /* Tool strip: filters, search, export. Tinted blue so the tools read as
+     controls, apart from the content they act on. */
+  --tools: var(--color-primary-50);
+  --tools-line: var(--color-primary-200);
+
+  /* Table header row and card header strip. */
+  --table-head: oklch(0.905 0.03 258);
+  --card-head: var(--color-gray-100);
 
   --success: oklch(0.44 0.1 155);
   --success-soft: oklch(0.962 0.03 155);
@@ -134,13 +164,28 @@
   --background-1: var(--color-gray-900);
   --foreground: var(--color-gray-100);
   --layer: var(--color-gray-900);
-  --layer-line: var(--color-gray-800);
+  --layer-line: var(--color-gray-700);
   --layer-hover: var(--color-gray-800);
   --card: var(--color-gray-900);
-  --card-line: var(--color-gray-800);
+  --card-line: var(--color-gray-700);
   --navbar: var(--color-gray-950);
   --navbar-line: var(--color-gray-800);
-  --border: var(--color-gray-800);
+  --border: var(--color-gray-700);
+  --control-line: var(--color-gray-500);
+  --panel-shadow: 0 1px 2px oklch(0 0 0 / 0.4);
+
+  --appbar: oklch(0.24 0.06 260);
+  --appbar-line: oklch(0.34 0.07 260);
+  --appbar-fg: oklch(1 0 0);
+  --appbar-fg-muted: oklch(0.84 0.03 258);
+  --appbar-hover: oklch(1 0 0 / 0.08);
+  --appbar-active: oklch(1 0 0 / 0.14);
+  --appbar-accent: oklch(0.83 0.12 82);
+
+  --tools: oklch(0.235 0.03 258);
+  --tools-line: oklch(0.36 0.05 258);
+  --table-head: oklch(0.27 0.035 258);
+  --card-head: var(--color-gray-800);
   --dropdown: var(--color-gray-900);
   --dropdown-line: var(--color-gray-700);
   --overlay: var(--color-gray-900);

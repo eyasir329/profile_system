@@ -1,0 +1,270 @@
+/*
+ * Admin › Emails (/admin/emails.php): the email log, one email, and the
+ * form for writing a custom email.
+ */
+@layer components {
+  /* ---- Summary numbers above the log ----
+     <dl class="stat-strip">
+       <div><dt>Sent</dt><dd>35</dd><p class="stat-note">90% delivered</p></div>
+     </dl>
+     A link inside <dd> makes the number a filter. */
+  .stat-strip {
+    @apply mb-6 grid grid-cols-2 overflow-hidden rounded-lg border border-card-line bg-card sm:grid-cols-4;
+    box-shadow: var(--panel-shadow);
+  }
+  .stat-strip > div {
+    @apply border-layer-line px-4 py-3.5 sm:px-5 max-sm:nth-[n+3]:border-t max-sm:even:border-l sm:not-first:border-l;
+  }
+  /* Two by two, for a narrower column (the admin dashboard). */
+  .stat-strip.is-2col {
+    @apply grid-cols-2;
+  }
+  .stat-strip.is-2col > div {
+    border-left-width: 0;
+    border-top-width: 0;
+  }
+  .stat-strip.is-2col > div:nth-child(even) {
+    border-left-width: 1px;
+  }
+  .stat-strip.is-2col > div:nth-child(n + 3) {
+    border-top-width: 1px;
+  }
+  .stat-strip dt {
+    @apply flex items-center gap-1.5 text-sm font-semibold text-muted-foreground-2;
+  }
+  .stat-strip dd {
+    @apply mt-1 text-2xl leading-tight font-bold tabular-nums;
+  }
+  .stat-strip dd a {
+    @apply text-foreground no-underline hover:text-primary hover:underline;
+  }
+  .stat-strip .is-danger dd,
+  .stat-strip .is-danger dd a {
+    @apply text-danger;
+  }
+  .stat-note {
+    @apply mt-0.5 text-xs text-muted-foreground-1;
+  }
+
+  /* ---- A day heading inside a .table: <tr class="table-group"><th colspan="4">Today</th></tr> ---- */
+  .table tbody tr.table-group > th {
+    @apply py-2 text-xs font-bold tracking-wide text-muted-foreground-2 uppercase;
+    background: var(--tools);
+  }
+  .table tbody tr.table-group:hover > th {
+    background: var(--tools);
+  }
+  /* The subject is the row's link; the whole row reacts to the pointer. */
+  .table .row-link {
+    @apply font-semibold text-foreground no-underline hover:text-primary hover:underline;
+  }
+  .table .row-link::after {
+    content: "";
+    @apply absolute inset-0;
+  }
+  .table tr.has-row-link {
+    @apply relative cursor-pointer;
+  }
+  /* The same day heading in the small-screen card list. */
+  .card-list-day {
+    @apply px-4 py-2 text-xs font-bold tracking-wide text-muted-foreground-2 uppercase;
+    background: var(--tools);
+  }
+  .cell-sub {
+    @apply mt-0.5 block text-sm text-muted-foreground-1;
+  }
+  .cell-error {
+    @apply mt-1 block max-w-64 truncate text-xs text-danger;
+  }
+
+  /* ---- People picker: search, then a scrolling list of check rows ----
+     <div class="pick">
+       <div class="pick-head">search + Select shown / Clear</div>
+       <ul class="pick-list"><li><label class="pick-row"><input type="checkbox"> person</label></li></ul>
+     </div> */
+  .pick {
+    @apply overflow-hidden rounded-lg border bg-layer;
+    border-color: var(--control-line);
+  }
+  .pick-head {
+    @apply flex flex-wrap items-center gap-2 border-b p-2;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  .pick-head .search-field {
+    @apply min-w-40 flex-1;
+  }
+  .pick-list {
+    @apply max-h-72 divide-y divide-layer-line overflow-y-auto overscroll-contain;
+  }
+  .pick-row {
+    @apply flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-layer-hover;
+  }
+  .pick-row input {
+    @apply size-4 shrink-0 cursor-pointer rounded-xs border bg-layer text-primary;
+    border-color: var(--color-line-4);
+  }
+  /* Same tick as .check (the forms plugin paints it on currentColor). */
+  .pick-row input:checked {
+    @apply border-transparent;
+    background-color: currentColor;
+  }
+  .pick-row input:focus {
+    --tw-ring-color: var(--primary);
+    --tw-ring-offset-color: var(--background);
+  }
+  .pick-row:has(input:checked) {
+    background: color-mix(in oklch, var(--primary) 7%, var(--layer));
+  }
+  .pick-empty {
+    @apply px-3 py-6 text-center text-sm text-muted-foreground-1;
+  }
+  .pick-foot {
+    @apply flex items-center justify-between gap-2 border-t border-layer-line px-3 py-2 text-sm text-muted-foreground-2;
+  }
+
+  /* Picked people as removable pills. */
+  .chip-list {
+    @apply mt-2 flex flex-wrap gap-1.5;
+  }
+  .chip {
+    @apply inline-flex max-w-full items-center gap-1 rounded-full border bg-card py-0.5 pr-1 pl-2.5 text-sm;
+    border-color: var(--control-line);
+  }
+  .chip > span {
+    @apply truncate;
+  }
+  .chip button {
+    @apply flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground-1 hover:bg-muted hover:text-foreground;
+  }
+  .chip .icon {
+    @apply size-3;
+  }
+
+  /* ---- Recipient summary under the composer, next to Send ---- */
+  .send-bar {
+    @apply mt-6 flex flex-wrap items-center gap-3 border-t border-layer-line pt-5;
+  }
+  .send-bar-note {
+    @apply mr-auto text-sm text-muted-foreground-2;
+  }
+  .send-bar-note strong {
+    @apply text-foreground;
+  }
+
+  /* ---- An email as the recipient sees it (compose preview and one logged email) ----
+     <div class="mail-preview">
+       <dl class="mail-head"><div><dt>To</dt><dd>…</dd></div></dl>
+       <div class="mail-brand"><span class="mail-logo">P</span> Profile System</div>
+       <div class="mail-body"><h3>Subject</h3><p>…</p></div>
+       <p class="mail-foot">Why you got this email</p>
+     </div> */
+  .mail-preview {
+    @apply overflow-hidden rounded-lg border border-card-line bg-card;
+    box-shadow: var(--panel-shadow);
+  }
+  .mail-head {
+    @apply border-b border-layer-line px-4 py-2 text-sm;
+    background: var(--card-head);
+  }
+  .mail-head > div {
+    @apply flex gap-3 py-0.5;
+  }
+  .mail-head dt {
+    @apply w-14 shrink-0 text-muted-foreground-1;
+  }
+  .mail-head dd {
+    @apply min-w-0 wrap-break-word;
+  }
+  .mail-canvas {
+    @apply p-4 sm:p-5;
+    background: color-mix(in oklch, var(--foreground) 4%, var(--card));
+  }
+  .mail-brand {
+    @apply flex items-center gap-2.5 rounded-t-md px-5 py-3 text-[0.9375rem] font-bold;
+    background: var(--appbar);
+    color: var(--appbar-fg);
+  }
+  .mail-logo {
+    @apply flex size-6 items-center justify-center rounded-sm bg-white font-serif text-sm font-bold;
+    color: var(--appbar);
+  }
+  .mail-body {
+    @apply rounded-b-md border border-t-0 border-card-line bg-card px-5 pt-5 pb-2;
+  }
+  .mail-body h3 {
+    @apply mb-3 font-serif text-xl leading-snug font-bold wrap-break-word;
+  }
+  .mail-body p {
+    @apply mb-3.5 text-[0.9375rem] leading-relaxed wrap-break-word whitespace-pre-line;
+  }
+  .mail-body p.is-quiet {
+    @apply text-muted-foreground-2;
+  }
+  .mail-body .mail-button {
+    @apply mb-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground;
+  }
+  .mail-foot {
+    @apply mt-3 text-center text-xs text-muted-foreground-1;
+  }
+  .mail-placeholder {
+    @apply italic text-muted-foreground-1;
+  }
+
+  /* ---- Settings: one kind of email per row, switch on the right ----
+     <div class="setting-row"><div class="setting-body">title, facts, note</div><label class="switch">…</label></div> */
+  .setting-row {
+    @apply flex items-start justify-between gap-5 border-t border-layer-line py-4 first:border-t-0;
+  }
+  /* Fade what the row is, but not the "While off" warning. */
+  .setting-row.is-muted :is(.setting-title, .setting-meta, .setting-stat) {
+    @apply opacity-55;
+  }
+  .setting-body {
+    @apply min-w-0 flex-1;
+  }
+  .setting-title {
+    @apply flex flex-wrap items-center gap-2 font-semibold;
+  }
+  .setting-meta {
+    @apply mt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm text-muted-foreground-2;
+  }
+  .setting-meta dt {
+    @apply font-medium text-muted-foreground-1;
+  }
+  .setting-stat {
+    @apply mt-1.5 text-xs text-muted-foreground-1;
+  }
+  .setting-off {
+    @apply mt-2 flex items-start gap-1.5 text-sm text-warning;
+  }
+  .setting-off .icon {
+    @apply mt-0.5 shrink-0;
+  }
+  /* The server's mail settings, read-only. */
+  .server-facts {
+    @apply grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr];
+  }
+  .server-facts dt {
+    @apply text-muted-foreground-2;
+  }
+  .server-facts dd {
+    @apply min-w-0 font-mono text-[0.8125rem] break-all;
+  }
+
+  /* ---- Admin › Activity: one event, icon + sentence; tone for ones worth a look ---- */
+  .activity-line {
+    @apply inline-flex items-start gap-2 font-medium;
+  }
+  .activity-line .icon {
+    @apply mt-0.5 shrink-0 text-muted-foreground-1;
+  }
+  .activity-line.is-warning,
+  .activity-line.is-warning .icon {
+    @apply text-warning;
+  }
+  .activity-line.is-danger,
+  .activity-line.is-danger .icon {
+    @apply text-danger;
+  }
+}

@@ -15,6 +15,12 @@
  *   - clear_attempts($bucket)
  *       Deletes every row in the bucket. Call on success.
  *
+ *   - rate_limit_lock($bucket)
+ *       Takes a database lock named after the bucket until the request
+ *       ends. Call it BEFORE too_many_attempts(): otherwise many requests
+ *       sent at the same moment all pass the check before any of them has
+ *       recorded its failure, and a "5 tries" limit allows hundreds.
+ *
  * Bucket keys are short strings, e.g. "email:foo@bar" or "ip:1.2.3.4".
  * They share the same 80-char column so keep them under that limit.
  *
@@ -27,20 +33,29 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 
 /**
- * Best-effort client IP. Returns the leftmost entry of X-Forwarded-For
+ * Best-effort client IP. Behind a trusted proxy: CF-Connecting-IP, else the rightmost entry of X-Forwarded-For
  * when TRUST_PROXY=1, otherwise REMOTE_ADDR. Falls back to "0.0.0.0"
  * if neither is set (e.g. CLI).
  */
 function client_ip(): string
 {
     $trustProxy = getenv('TRUST_PROXY') === '1';
-    if ($trustProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        // X-Forwarded-For is "client, proxy1, proxy2, ..." — the first
-        // entry is the original client. Take the leftmost valid IP.
-        $parts = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
-        $candidate = trim($parts[0] ?? '');
-        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
-            return $candidate;
+    if ($trustProxy) {
+        // Behind Cloudflare: CF-Connecting-IP is set by Cloudflare itself.
+        $cf = trim((string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($cf !== '' && filter_var($cf, FILTER_VALIDATE_IP)) {
+            return $cf;
+        }
+        // Otherwise X-Forwarded-For. Its LEFT entries are whatever the
+        // visitor sent (anyone can type a fake one, which would dodge the
+        // per-IP limits); the RIGHTMOST is the address the trusted proxy
+        // in front of us saw. Use that.
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $parts = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+            $candidate = trim((string)end($parts));
+            if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
+                return $candidate;
+            }
         }
     }
     $remote = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -73,6 +88,41 @@ function too_many_attempts(string $bucket, int $max, int $windowSeconds): bool
     } catch (Throwable $e) {
         error_log('ratelimit.too_many_attempts: ' . $e->getMessage());
         return false; // fail open — better to let some abuse through than to lock everyone out
+    }
+}
+
+/**
+ * Serialise every request that counts against $bucket: check, attempt and
+ * record then happen one request at a time. The lock is MariaDB's
+ * GET_LOCK(), held by this request's connection and released when the
+ * request ends. Take several in a fixed order (email, then IP) so two
+ * requests can never wait on each other.
+ *
+ * Returns false when the lock could not be had within $timeoutSeconds:
+ * a queue that long is itself a flood, so callers treat it as "too many
+ * attempts" (carrying on unlocked would bring the race back). A database
+ * error returns true, failing open like too_many_attempts().
+ */
+function rate_limit_lock(string $bucket, int $timeoutSeconds = 10): bool
+{
+    global $pdo;
+    if (!isset($pdo) || $bucket === '') {
+        return true;
+    }
+    try {
+        // Lock names are at most 64 characters: 'ps_rl:' + 40 hex.
+        $st = $pdo->prepare('SELECT GET_LOCK(:n, :t)');
+        $st->bindValue('n', 'ps_rl:' . sha1($bucket), PDO::PARAM_STR);
+        $st->bindValue('t', $timeoutSeconds, PDO::PARAM_INT);
+        $st->execute();
+        if ((int)$st->fetchColumn() === 1) {
+            return true;
+        }
+        error_log('ratelimit.rate_limit_lock: timed out on ' . substr($bucket, 0, 40));
+        return false;
+    } catch (Throwable $e) {
+        error_log('ratelimit.rate_limit_lock: ' . $e->getMessage());
+        return true;
     }
 }
 

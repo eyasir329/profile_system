@@ -40,3 +40,21 @@ node_modules
 resources
 package.json
 package-lock.json
+
+# ---- Never bake data or credentials into the image ----
+# `COPY . /var/www` copies everything not listed here. Database dumps
+# (personal data), test scripts with real logins and tunnel logs (the
+# public URL) must not end up inside an image that can be pushed or shared.
+backups/
+*.sql.gz
+*.dump
+*.xlsx
+*.csv
+crud_test.sh
+docker/smoke.sh
+public/docker/
+cloudflared.log
+cloudflared.pid
+
+# Developer tools, not part of the app.
+tools/

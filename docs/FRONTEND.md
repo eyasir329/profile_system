@@ -55,7 +55,11 @@ resources/
 │       ├── navigation.css .navbar .menu .side-nav .segmented .site-footer
 │       ├── data.css       .avatar .person .toolbar .table .sheet .facts .copy-box .steps
 │       ├── overlay.css    .modal .toast
-│       └── profile.css    .identity .completion .value-card .inline-form
+│       ├── profile.css    .identity .completion .value-card .inline-form
+│       ├── mail.css       .stat-strip .pick .chip .mail-preview (Admin › Emails)
+│       ├── chart.css      .chart .chart-col .heat .bars .chart-tip (charts.php)
+│       ├── admin.css      .user-summary .save-bar .bulk-bar .attention .palette
+│       └── landing.css    .landing-* .feature-grid .role-grid (the public home page)
 ├── js/
 │   ├── app.js             entry: starts Alpine, flash toasts, first-error focus
 │   ├── ui.js              Alpine stores, directives, components
@@ -81,13 +85,46 @@ public/assets/             BUILD OUTPUT, do not edit by hand
 - Colours come from tokens (`bg-layer`, `text-muted-foreground-2`,
   `border-danger-line`). Do not use raw palette classes in templates.
 
+### Responsive rules
+
+Every page must work from a 320 px phone to a 1920 px desktop, in portrait
+and landscape, with touch or a mouse. Breakpoints are Tailwind's: `sm`
+640, `md` 768, `lg` 1024, `xl` 1280 px. Mobile first: unprefixed classes
+are the phone layout, prefixes add columns as the screen grows.
+
+- **Top bar**: the full bar from `lg`; below it (phones *and* tablets)
+  the links, role switcher and account move into the drawer. The admin
+  bar does not fit a 768 px tablet, so every role switches at the same
+  width. The drawer scrolls on its own if it is taller than the screen.
+- **No sideways page scroll, ever.** Wide content (tables, the sheet,
+  tab strips) scrolls inside its own frame. Any box with `overflow:
+  auto | hidden` must also be `position: relative`: otherwise the
+  absolutely positioned `.sr-only` labels inside it ("Not set" in empty
+  cells) escape the clipping and stretch the whole page (this made the
+  Students sheet 2,500 px wide on phones). `.sr-only` also gets `left: 0`
+  as a safety net (`base.css`).
+- **Grid and flex children shrink.** `base.css` gives grid items
+  `min-width: 0`; give flex children that hold text `min-w-0` (or a
+  sensible `min-w-[10rem]`) and rows of buttons `flex-wrap`, so a long
+  name or a row of actions wraps instead of overflowing. Long unbroken
+  words wrap (`overflow-wrap: break-word` on `body`).
+- **Tabs**: `.view-tabs` wrap onto a second row on phones; tab strips
+  that must stay on one line (`.side-nav`, `.tab-list`, `.sheet-tabs`)
+  scroll sideways inside themselves.
+- **Touch targets** are at least 24 × 24 px (WCAG 2.5.8): footer links,
+  "Show as table", sort headers and small links are padded. On touch
+  screens (`pointer: coarse`) checkboxes and radios are 20 px.
+- **Type scales with the screen** where it is large: the home headline
+  uses `clamp()` so it never fills a phone screen on its own.
+
 ### Adding a component
 
 1. Check [`COMPONENTS.md`](COMPONENTS.md): it may already exist.
 2. Add the class to the matching file in `resources/css/components/`
    with a comment that says what it is for and shows the markup.
 3. Use tokens for every colour.
-4. `npm run build`, then check it in light and dark, and at 390 px wide.
+4. `npm run build`, then check it in light and dark, at 320 px, 768 px
+   and 1280 px wide (see "Responsive rules" above).
 5. Document it in `COMPONENTS.md`.
 
 ## JavaScript
@@ -129,6 +166,7 @@ ever has to HTML-escape, never JS-escape.
 | `x-confirm` | `<form>` | Asks before submitting. `data-confirm-title`, `-body`, `-ok`, `-cancel`, `-tone="primary"` |
 | `x-copy` | `<button data-copy="...">` | Copies the value and shows a toast |
 | `x-autosubmit` | filter `<form>` | Submits when a `<select>` changes |
+| `x-chart` | `<figure class="chart">` | Tooltip for marks with `data-tip` JSON, on hover and keyboard focus (built with `textContent`) |
 
 ### Components (`x-data="..."`)
 
@@ -140,6 +178,11 @@ ever has to HTML-escape, never JS-escape.
 | `passwordForm` | Settings → Security: live length and match hints |
 | `sheet` | Full-screen mode of the directory's wide table (remembered per tab) |
 | `confirmDialog` | The `<dialog>` in `footer.php` |
+| `sectionNav` | Admin › one user: "On this page" follows the section in view; holds `student` (shows Lab details) |
+| `bulkSelect` | Admin › Users: ticked rows, select all, the bulk bar and its Email link (`data-compose`) |
+| `palette` | Admin command palette: pages from `data-palette`, people from `/admin/search.php` |
+| `tzPicker` | Admin › Site settings: live preview of the chosen time zone, "use my computer's zone" |
+| `emailComposer` | Admin › Emails › Write an email: people search and picker, live recipient count and preview, `{name}` button, confirm before a real send |
 
 One-line state is written inline, for example the password toggle
 (`x-data="{ show: false }"`) and the mobile drawer.
@@ -183,7 +226,10 @@ There are no automated front-end tests in the repository. Before
 shipping a visual change, check by hand:
 
 1. Light and dark (Settings → Appearance).
-2. 390 px wide: no sideways scrolling, the drawer opens.
+2. 320, 390, 768 (portrait tablet), 1024 and 1280 px wide, and a phone
+   in landscape (667 × 375): no sideways scrolling, the drawer opens
+   below 1024 px, nothing is cut off. `tools/responsive-audit.js` checks
+   every page at nine sizes for you (see its header).
 3. Keyboard only: Tab order, visible focus, Esc closes menus and dialogs.
 4. The browser console is clean.
 5. `make lint` for PHP syntax.

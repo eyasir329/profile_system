@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 verify_csrf();
 
+if (isset($_SESSION['user_id'])) { log_activity((int)$_SESSION['user_id'], 'logout', null); }
 $_SESSION = [];
 
 if (ini_get('session.use_cookies')) {

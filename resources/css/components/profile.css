@@ -5,14 +5,15 @@
 @layer components {
   /* ---- Identity header ---- */
   .identity {
-    @apply mb-8 flex flex-wrap items-start gap-x-6 gap-y-4 sm:mb-10 sm:gap-y-5;
+    @apply mb-6 flex flex-wrap items-start gap-x-6 gap-y-4 rounded-lg border border-card-line bg-card p-5 sm:mb-8 sm:gap-y-5 sm:p-6;
+    box-shadow: var(--panel-shadow);
   }
   /* Phones: a smaller avatar next to the name, not a block above it. */
   @media (width < 40rem) {
     .identity > .avatar-xl {
       @apply size-14 text-xl;
     }
-    .identity-body {
+    .identity .identity-body {
       @apply basis-40;
     }
     .identity-name {
@@ -35,8 +36,15 @@
   }
 
   /* ---- Completion panel ---- */
+  /* Sits inside the identity panel, so it takes the tool tint, not a second white card. */
   .completion {
-    @apply w-full rounded-lg border border-card-line bg-card p-4 lg:w-72;
+    @apply w-full rounded-lg border p-4 lg:w-72;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  .completion .progress {
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--tools-line);
   }
   .completion-head {
     @apply mb-2 flex items-baseline justify-between text-sm;
@@ -59,13 +67,23 @@
 
   /* ---- Two-column layout: section list + content ---- */
   .profile-layout {
-    @apply grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 lg:grid-cols-[13.5rem_minmax(0,1fr)];
+    @apply grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-6 lg:grid-cols-[14rem_minmax(0,1fr)];
   }
+  /* Phones: a sticky strip under the top bar. Wide screens: a panel of its own. */
   .profile-nav {
-    @apply sticky top-14 z-30 -mx-4 border-b border-layer-line bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:top-20 lg:mx-0 lg:self-start lg:border-0 lg:bg-transparent lg:p-0;
+    @apply sticky top-16 z-30 -mx-4 border-b border-layer-line bg-background px-4 py-2 sm:-mx-6 sm:px-6 lg:top-24 lg:mx-0 lg:self-start lg:rounded-lg lg:border lg:border-card-line lg:bg-card lg:p-2;
+  }
+  @media (width >= 64rem) {
+    .profile-nav {
+      box-shadow: var(--panel-shadow);
+    }
+    .profile-nav .side-nav-title {
+      @apply -mx-2 -mt-2 mb-2 rounded-t-lg border-b border-card-line px-5 py-3;
+      background: var(--card-head);
+    }
   }
   .profile-nav-note {
-    @apply mt-5 hidden px-3 text-sm leading-snug text-muted-foreground-1 lg:block;
+    @apply mt-2 hidden border-t border-layer-line px-3 pt-3 pb-1 text-sm leading-snug text-muted-foreground-1 lg:block;
   }
   .side-nav-item.is-complete .side-nav-count {
     @apply text-muted-foreground-2;
@@ -171,17 +189,31 @@
   }
 
   /* Tabs inside a section (publications and awards). */
+  /* Same segmented look as .view-tabs (data.css): the selected tab is raised and blue. */
   .tab-list {
-    @apply mt-4 flex gap-1 overflow-x-auto border-b border-layer-line;
+    @apply relative mt-4 flex max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:inline-flex;
+    background: var(--tools);
+    border-color: var(--tools-line);
+    scrollbar-width: none;
   }
   .tab-list [role="tab"] {
-    @apply -mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground-2 hover:text-foreground;
+    @apply inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold whitespace-nowrap text-muted-foreground-2;
+    transition: background-color 120ms, color 120ms;
+  }
+  .tab-list [role="tab"]:hover {
+    @apply bg-card text-foreground;
   }
   .tab-list [role="tab"][aria-selected="true"] {
-    @apply border-primary text-foreground;
+    @apply bg-card text-primary;
+    border-color: var(--tools-line);
+    box-shadow: 0 1px 2px oklch(0.2 0.05 260 / 0.14), inset 0 -2px 0 var(--primary);
+  }
+  .tab-list [role="tab"][aria-selected="true"] .tab-count {
+    @apply bg-primary text-primary-foreground;
   }
   .tab-count {
-    @apply rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground-2;
+    @apply min-w-5 rounded-full px-1.5 text-center text-xs font-bold tabular-nums text-muted-foreground-2;
+    background: color-mix(in oklch, var(--foreground) 10%, transparent);
   }
   .tab-panel-head {
     @apply flex items-start justify-between gap-4 pt-4 pb-1;
@@ -199,6 +231,13 @@
     .inline-form.entry-form > .form-actions {
       @apply col-span-3;
     }
+  }
+
+  /* While a list is empty, its "Add your first ..." button is the only Add:
+     the header's Add would do the same thing. */
+  .section:has(> [data-section-empty]:not([hidden])) > .section-head [data-entry-add],
+  [role="tabpanel"]:has(> [data-section-empty]:not([hidden])) > .tab-panel-head [data-entry-add] {
+    display: none;
   }
 
   /* "Add your first ..." button shown while a section has no entries. */

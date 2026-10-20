@@ -1,0 +1,129 @@
+/*
+ * Landing page (public/index.php): hero, feature grid, role cards and the
+ * help strip. Tokens only, so dark mode follows on its own. Mobile first:
+ * one column on phones, two on tablets, the full layout from lg.
+ */
+@layer components {
+  .landing {
+    @apply pt-6 pb-4 sm:pt-10 lg:pt-14;
+  }
+
+  /* ---- Hero ---- */
+  .landing-hero {
+    @apply grid items-start gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)];
+  }
+  .landing-hero-text {
+    @apply max-w-2xl;
+  }
+  .landing-eyebrow {
+    @apply mb-5 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold text-primary;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  /* Fluid: 2 rem on a 320 px phone up to 3.25 rem on a wide screen, so the
+     headline never fills a small screen on its own. */
+  .landing-title {
+    @apply font-bold tracking-[-0.02em];
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 1.35rem + 3.2vw, 3.25rem);
+    line-height: 1.08;
+  }
+  .landing-lead {
+    @apply mt-5 text-lg leading-relaxed text-muted-foreground-2 sm:mt-6;
+  }
+  .landing-actions {
+    @apply mt-7 flex flex-wrap gap-3;
+  }
+  /* Full-width buttons on the smallest phones, side by side from sm. */
+  .landing-actions .btn {
+    @apply max-sm:w-full;
+  }
+  .landing-note {
+    @apply mt-4 text-sm text-muted-foreground-2;
+  }
+
+  .landing-sample {
+    @apply w-full max-w-md justify-self-center lg:max-w-none;
+  }
+  .landing-caption {
+    @apply mt-3 text-center text-sm text-muted-foreground-1;
+  }
+
+  /* ---- Sections ---- */
+  .landing-section {
+    @apply mt-14 border-t border-layer-line pt-12 sm:mt-16;
+  }
+  .landing-section-head {
+    @apply mb-8 max-w-2xl;
+  }
+  .landing-h2 {
+    @apply text-2xl font-bold;
+    font-family: var(--font-serif);
+  }
+  .landing-sub {
+    @apply mt-2 text-muted-foreground-2;
+  }
+  .landing-split {
+    @apply grid gap-x-16 gap-y-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)];
+  }
+  .landing-split .steps {
+    @apply max-w-xl;
+  }
+
+  /* ---- Feature grid ---- */
+  .feature-grid {
+    @apply m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3;
+  }
+  .feature {
+    @apply rounded-lg border border-card-line bg-card p-5;
+    box-shadow: var(--panel-shadow);
+  }
+  .feature-icon {
+    @apply mb-3 inline-flex size-10 items-center justify-center rounded-md text-primary;
+    background: var(--tools);
+    box-shadow: inset 0 0 0 1px var(--tools-line);
+  }
+  .feature-icon .icon {
+    @apply size-5;
+  }
+  .feature-title {
+    @apply text-base font-semibold;
+  }
+  .feature-text {
+    @apply mt-1.5 text-[0.9375rem] leading-relaxed text-muted-foreground-2;
+  }
+
+  /* ---- Role cards ---- */
+  .role-grid {
+    @apply grid grid-cols-1 gap-4 lg:grid-cols-3;
+  }
+  .role-card {
+    @apply rounded-lg border border-card-line bg-card p-5;
+    box-shadow: var(--panel-shadow);
+  }
+  .role-card h3 {
+    @apply text-base font-semibold;
+  }
+  .role-card-summary {
+    @apply mt-1 font-serif text-lg font-semibold;
+  }
+  .role-card-list {
+    @apply m-0 mt-3 list-none space-y-2 p-0 text-[0.9375rem] text-muted-foreground-2;
+  }
+  .role-card-list li {
+    @apply flex items-start gap-2;
+  }
+  .role-card-list .icon {
+    @apply mt-1 text-success;
+  }
+
+  /* ---- Help strip ---- */
+  .landing-help {
+    @apply mt-14 flex flex-col gap-5 rounded-lg border p-5 sm:mt-16 sm:p-6 md:flex-row md:items-center md:justify-between;
+    background: var(--tools);
+    border-color: var(--tools-line);
+  }
+  .landing-help-links {
+    @apply flex flex-wrap gap-2;
+  }
+}

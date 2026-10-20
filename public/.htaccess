@@ -3,5 +3,8 @@
 # private: only authenticated users can reach any profile data, and
 # there is no anonymous route for it.
 #
+# NOT READ: the base image sets AllowOverride None, so Apache ignores
+# .htaccess files. The rules that apply are in docker/apache/app.conf.
+#
 # Disable directory listing for safety.
 Options -Indexes

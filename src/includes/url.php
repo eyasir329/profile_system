@@ -24,6 +24,9 @@ function url_dashboard(): string { return url_for('dashboard.php'); }
 function url_profile(): string { return url_for('profile.php'); }
 function url_settings(): string { return url_for('settings.php'); }
 function url_admin(): string { return url_for('admin/index.php'); }
+function url_admin_emails(): string { return url_for('admin/emails.php'); }
+function url_admin_activity(): string { return url_for('admin/activity.php'); }
+function url_admin_settings(): string { return url_for('admin/settings.php'); }
 function url_students(): string { return url_for('students.php'); }
 function url_admin_user(): string { return url_for('admin/user.php'); }
 function url_invites(): string { return url_for('invites.php'); }
@@ -31,6 +34,9 @@ function url_resources(): string { return url_for('resources.php'); }
 function url_switch_role(): string { return url_for('switch_role.php'); }
 function url_forgot(): string { return url_for('forgot_password.php'); }
 function url_reset(): string  { return url_for('reset_password.php'); }
+function url_about(): string  { return url_for('about.php'); }
+function url_help(): string   { return url_for('help.php'); }
+function url_privacy(): string { return url_for('privacy.php'); }
 
 function is_logged_in(): bool
 {

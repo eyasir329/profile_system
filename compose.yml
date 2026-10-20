@@ -56,7 +56,10 @@ services:
     ports:
       # Map host:8080 -> container:80. Change the left side if 8080 is in
       # use on your machine (e.g. "9000:80").
-      - "${WEB_PORT:-8080}:80"
+      # WEB_BIND=127.0.0.1 when the site is published through a tunnel
+      # (TRUST_PROXY=1): then nobody on the network can skip the proxy and
+      # send their own X-Forwarded-For. See .env.example.
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:80"
     environment:
       # The web entrypoint uses DB_USER + DB_PASSWORD as the
       # "operator" credentials (used to CREATE USER / GRANT for the
@@ -77,6 +80,16 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       APP_ENV: ${APP_ENV:-development}
+      # Email (src/includes/mailer.php). Empty MAIL_HOST = email off.
+      # For local testing, `make mail` starts Mailpit; see .env.example.
+      APP_URL: ${APP_URL:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Profile System}
     volumes:
       # Photo uploads persist across container recreations. The named
       # volume is managed by Docker; you can `docker volume inspect
@@ -99,9 +112,13 @@ services:
       #
       # To go back to "image-baked" mode (recommended for production),
       # remove these three lines and rebuild with `docker compose up --build`.
-      - ./public:/var/www/html:rw
-      - ./src:/var/www/src:rw
-      - ./database:/var/www/database:rw
+      #
+      # Read-only: the web server reads the code but can never change it,
+      # so a bug that lets someone write files can't plant a script in the
+      # project on the host. Uploads have their own writable volume above.
+      - ./public:/var/www/html:ro
+      - ./src:/var/www/src:ro
+      - ./database:/var/www/database:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/"]
       interval: 30s
@@ -136,7 +153,8 @@ services:
     ports:
       # Map host:8081 -> container:8080. Change the left side if 8081 is
       # in use on your machine (e.g. "9001:8080").
-      - "${ADMINER_PORT:-8081}:8080"
+      # 127.0.0.1: reachable from this machine only, never the network.
+      - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
     environment:
       # Pre-fill the "Server" field on the login page.
       ADMINER_DEFAULT_SERVER: ${DB_HOST:-profile_db}
@@ -144,6 +162,20 @@ services:
       # pepa-linha-dark, pepa-linha-admin, brentlegg, parachute, galkaev.
       ADMINER_DESIGN: pepa-linha-dark
     # Adminer is stateless (no volumes needed). Image stays small.
+
+  # Mailpit: a fake mail server for development. It catches every email
+  # the app sends and shows it in a web inbox, so nothing reaches real
+  # people while testing. On the "tools" profile, like Adminer:
+  #   make mail          (then open http://localhost:8025)
+  # Point the app at it in .env: MAIL_HOST=mailpit, MAIL_PORT=1025,
+  # MAIL_ENCRYPTION=none, MAIL_FROM_ADDRESS=noreply@example.test
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    container_name: profile_mailpit
+    restart: unless-stopped
+    profiles: ["tools"]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
 
 # Named volumes — survive `docker compose down`. Use `docker compose
 # down -v` to actually delete them.

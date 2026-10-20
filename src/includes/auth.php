@@ -1,12 +1,20 @@
 <?php
 declare(strict_types=1);
 
+// First, so a crash anywhere after this shows the error page, not a blank one.
+require_once __DIR__ . '/error_page.php';
+install_error_page_handlers();
+
 require_once __DIR__ . '/validate.php';
 require_once __DIR__ . '/ratelimit.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
+    // Keep session files as long as the idle limit in require_login()
+    // (SESSION_IDLE_SECONDS), so a session ends when that says, not at
+    // PHP's default 24 minutes picked at random by garbage collection.
+    ini_set('session.gc_maxlifetime', '7200');
     // The Secure cookie flag is set when:
     //   - the request arrived over HTTPS directly, OR
     //   - we are behind a trusted proxy (TRUST_PROXY=1) and the proxy
@@ -22,13 +30,23 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
             && strcasecmp((string)$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') === 0;
         $cookieSecure = $directHttps || $forwardedHttps;
     }
+    // Over HTTPS the cookie is "__Host-" prefixed: browsers then accept it
+    // only with Secure, Path=/ and no Domain, so a sibling site (another
+    // *.trycloudflare.com tunnel, a subdomain) can't plant or overwrite it.
+    session_name($cookieSecure ? '__Host-ps_session' : 'ps_session');
     session_set_cookie_params([
+        'path'     => '/',
         'httponly' => true,
         'secure'   => $cookieSecure,
         'samesite' => 'Lax',
     ]);
     session_start();
 }
+
+// Delete what is past its keep-by date (deactivated accounts after 30
+// days, old sign-in records), at most every 6 hours. See housekeeping.php.
+require_once __DIR__ . '/housekeeping.php';
+housekeeping_maybe_run($GLOBALS['pdo'] ?? null);
 
 function e(mixed $value): string
 {
@@ -58,8 +76,8 @@ function verify_csrf(): void
 {
     $submitted = $_POST['csrf_token'] ?? '';
     if (!is_string($submitted) || !hash_equals(csrf_token(), $submitted)) {
-        http_response_code(419);
-        exit('This form has expired or is invalid. Go back, refresh the page, and try again.');
+        require_once __DIR__ . '/error_page.php';
+        render_error_page(419);
     }
 }
 
@@ -69,33 +87,109 @@ function require_login(): void
         header('Location: /login.php');
         exit;
     }
-    // Soft-delete: if the user is deactivated, force a logout + banner.
+    // Every request re-checks the account, so a change takes effect at once:
+    //   gone (deleted)           -> signed out
+    //   deactivated              -> signed out, with a banner
+    //   session_epoch raised     -> signed out (password changed or reset,
+    //                               two-factor reset; see session_epoch_bump())
+    // and then re-reads the roles, so a revoked role stops working now,
+    // not at the next sign-in (ensure_active_role_valid()).
     $pdo = auth_pdo();
     if ($pdo !== null) {
         try {
-            $st = $pdo->prepare('SELECT deleted_at FROM users WHERE id = :id');
+            $st = $pdo->prepare('SELECT deleted_at, session_epoch FROM users WHERE id = :id');
             $st->execute(['id' => (int)$_SESSION['user_id']]);
             $row = $st->fetch();
-            if ($row && !empty($row['deleted_at'])) {
-                $_SESSION = [];
-                if (ini_get('session.use_cookies')) {
-                    $p = session_get_cookie_params();
-                    setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
-                }
-                session_destroy();
-                header('Location: /login.php?deactivated=1');
-                exit;
+            if (!$row) {
+                end_session('/login.php?logged_out=1');
             }
-        } catch (Throwable $e) { /* ignore — don't break auth on DB hiccup */ }
+            if (!empty($row['deleted_at'])) {
+                end_session('/login.php?deactivated=1');
+            }
+            if ((int)$row['session_epoch'] !== (int)($_SESSION['epoch'] ?? 0)) {
+                end_session('/login.php?signed_out=1');
+            }
+        } catch (Throwable $e) {
+            // Fail closed: if the account can't be checked, a deleted or
+            // signed-out session must not get through on cached roles.
+            error_log('auth.require_login: ' . $e->getMessage());
+            require_once __DIR__ . '/error_page.php';
+            render_error_page(503, '', minimal: true);
+        }
+    } else {
+        require_once __DIR__ . '/error_page.php';
+        render_error_page(503, '', minimal: true);
     }
+    // Idle and absolute limits, so a session left open on a shared lab PC
+    // (or a stolen cookie) does not stay valid for ever.
+    $now = time();
+    $started = (int)($_SESSION['signed_in_at'] ?? 0);
+    $seen    = (int)($_SESSION['last_seen_at'] ?? 0);
+    if ($started === 0) {
+        // Sessions from before this check: start the clock now.
+        $_SESSION['signed_in_at'] = $started = $now;
+    }
+    if ($now - $started > SESSION_ABSOLUTE_SECONDS || ($seen !== 0 && $now - $seen > SESSION_IDLE_SECONDS)) {
+        end_session('/login.php?expired=1');
+    }
+    $_SESSION['last_seen_at'] = $now;
+    ensure_active_role_valid();
+}
+
+/** A session ends after this long without a request... */
+const SESSION_IDLE_SECONDS = 2 * 3600;
+/** ...and this long after signing in, whatever happens. */
+const SESSION_ABSOLUTE_SECONDS = 7 * 86400;
+
+/** Start the idle and absolute session clocks (call at every sign-in). */
+function session_mark_signed_in(): void
+{
+    $_SESSION['signed_in_at'] = time();
+    $_SESSION['last_seen_at'] = time();
+}
+
+/** Destroy the session and its cookie, then redirect. */
+function end_session(string $to): never
+{
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $p = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
+    }
+    session_destroy();
+    header('Location: ' . $to);
+    exit;
+}
+
+/**
+ * End every session of $userId (their next request signs them out). If the
+ * current session is theirs, it is kept: pass $keepCurrent = false to end
+ * that one too.
+ */
+function session_epoch_bump(PDO $pdo, int $userId, bool $keepCurrent = true): void
+{
+    $pdo->prepare('UPDATE users SET session_epoch = session_epoch + 1 WHERE id = :u')->execute(['u' => $userId]);
+    if ($keepCurrent && (int)($_SESSION['user_id'] ?? 0) === $userId) {
+        $e = $pdo->prepare('SELECT session_epoch FROM users WHERE id = :u');
+        $e->execute(['u' => $userId]);
+        $_SESSION['epoch'] = (int)$e->fetchColumn();
+    }
+}
+
+/** The account's current epoch, stored in the session at sign-in. */
+function session_epoch_of(PDO $pdo, int $userId): int
+{
+    $e = $pdo->prepare('SELECT session_epoch FROM users WHERE id = :u');
+    $e->execute(['u' => $userId]);
+    return (int)$e->fetchColumn();
 }
 
 function require_admin(): void
 {
     require_login();
     if (($_SESSION['user_role'] ?? '') !== 'admin') {
-        http_response_code(403);
-        exit('Forbidden — admin access required. Use the role switcher in the top bar to act as Admin.');
+        require_once __DIR__ . '/error_page.php';
+        render_error_page(403, 'This page is for admins.');
     }
 }
 
@@ -243,8 +337,8 @@ function require_teacher(): void
 {
     require_login();
     if (!has_role('teacher') && !has_role('admin')) {
-        http_response_code(403);
-        exit('Forbidden — teacher or admin access required.');
+        require_once __DIR__ . '/error_page.php';
+        render_error_page(403, 'This page is for teachers and admins.');
     }
 }
 
@@ -342,6 +436,109 @@ function totp_verify(string $secret, string $code, int $windowSteps = 1): bool
     return false;
 }
 
+/** The 30-second step a valid code belongs to (±1 step for clock drift), or null. */
+function totp_matching_step(string $secret, string $code): ?int
+{
+    $now = intdiv(time(), 30);
+    for ($i = -1; $i <= 1; $i++) {
+        $candidate = totp_generate($secret, ($now + $i) * 30);
+        if ($candidate !== null && hash_equals($candidate, $code)) { return $now + $i; }
+    }
+    return null;
+}
+
+/**
+ * Backup codes: ten single-use codes shown once when two-factor is turned
+ * on (or regenerated). Stored like passwords: only password_hash() of each
+ * code is kept, as a JSON list in two_factor.backup_codes. Lists written
+ * before hashing hold the plain 8-character codes; those still work.
+ */
+function backup_codes_generate(): array
+{
+    $codes = [];
+    for ($i = 0; $i < 10; $i++) {
+        $hex = strtoupper(bin2hex(random_bytes(4)));
+        $codes[] = substr($hex, 0, 4) . '-' . substr($hex, 4);   // ABCD-1234
+    }
+    return $codes;
+}
+
+/** JSON to store for a fresh list of codes. */
+function backup_codes_store(array $codes): string
+{
+    return json_encode(array_map(fn($c) => password_hash(backup_code_normalize($c), PASSWORD_DEFAULT), $codes));
+}
+
+/** "abcd 1234" / "ABCD-1234" -> "ABCD1234" */
+function backup_code_normalize(string $code): string
+{
+    return strtoupper(preg_replace('/[\s-]+/', '', $code));
+}
+
+/** How many unused backup codes a user has left. */
+function backup_codes_left(PDO $pdo, int $userId): int
+{
+    $st = $pdo->prepare('SELECT backup_codes FROM two_factor WHERE user_id = :u AND enabled = 1');
+    $st->execute(['u' => $userId]);
+    $list = json_decode((string)$st->fetchColumn(), true);
+    return is_array($list) ? count($list) : 0;
+}
+
+/**
+ * The second sign-in step: a 6-digit code from the authenticator app, or
+ * one of the backup codes (which is then used up).
+ *
+ * Returns 'totp', 'backup', 'locked' (too many wrong tries: 5 per 10
+ * minutes per account, so neither kind of code can be guessed) or '' for
+ * a wrong code.
+ */
+function second_factor_check(int $userId, string $input): string
+{
+    $pdo = auth_pdo();
+    $bucket = 'totp:' . $userId;
+    // One check at a time per account: parallel requests can neither slip
+    // past the limit nor spend the same backup code twice.
+    if (!rate_limit_lock($bucket) || too_many_attempts($bucket, 5, 600)) { return 'locked'; }
+
+    $st = $pdo->prepare('SELECT secret, backup_codes FROM two_factor WHERE user_id = :u AND enabled = 1');
+    $st->execute(['u' => $userId]);
+    $row = $st->fetch();
+    $result = '';
+    if ($row) {
+        $code = backup_code_normalize($input);
+        if (preg_match('/^\d{6}$/', $code) && ($step = totp_matching_step((string)$row['secret'], $code)) !== null) {
+            // Each code works once: refuse a step at or before the last one used.
+            // Claim the step in one statement: it only succeeds if no code
+            // of this step or a later one was used before (no replay).
+            $claim = $pdo->prepare('UPDATE two_factor SET last_used_at = FROM_UNIXTIME(:t)
+                                     WHERE user_id = :u AND (last_used_at IS NULL OR last_used_at < FROM_UNIXTIME(:t2))');
+            $claim->execute(['t' => $step * 30, 't2' => $step * 30, 'u' => $userId]);
+            if ($claim->rowCount() === 1) {
+                $result = 'totp';
+            }
+        } elseif (preg_match('/^[0-9A-F]{8}$/', $code)) {
+            $list = json_decode((string)$row['backup_codes'], true);
+            foreach (is_array($list) ? $list : [] as $i => $stored) {
+                $stored = (string)$stored;
+                $match = str_starts_with($stored, '$') ? password_verify($code, $stored) : hash_equals(strtoupper($stored), $code);
+                if ($match) {
+                    unset($list[$i]);   // single use
+                    $pdo->prepare('UPDATE two_factor SET backup_codes = :c, last_used_at = NOW() WHERE user_id = :u')
+                        ->execute(['c' => json_encode(array_values($list)), 'u' => $userId]);
+                    $result = 'backup';
+                    break;
+                }
+            }
+        }
+    }
+    if ($result === '') {
+        record_attempt($bucket, $userId, client_ip(), '', false);
+    } else {
+        clear_attempts($bucket);
+    }
+    return $result;
+}
+
 /**
  * Require a TOTP step at login. Called after `verify_csrf` and after the
  * password has been verified but before the user is signed in.
@@ -359,10 +556,7 @@ function require_totp_or_login(): void
         $code = (string)($_POST['totp'] ?? '');
         $pdo = auth_pdo();
         if ($pdo === null) { http_response_code(500); exit('DB unavailable'); }
-        $st = $pdo->prepare('SELECT secret FROM two_factor WHERE user_id = :u AND enabled = 1');
-        $st->execute(['u' => $pendingId]);
-        $tfRow = $st->fetch();
-        if (!$tfRow || !totp_verify((string)$tfRow['secret'], $code)) {
+        if (!in_array(second_factor_check($pendingId, $code), ['totp', 'backup'], true)) {
             http_response_code(401);
             $_SESSION['totp_error'] = 'Wrong code. Try again.';
             header('Location: login_totp.php');
@@ -395,8 +589,12 @@ function complete_totp_login(int $userId): void
         header('Location: /login.php?error=1');
         exit;
     }
+    // A new session id now that the account is fully signed in.
+    session_regenerate_id(true);
+    session_mark_signed_in();
     $_SESSION['user_id']       = (int)$u['id'];
     $_SESSION['user_name']     = (string)$u['name'];
+    $_SESSION['epoch']         = session_epoch_of($pdo, (int)$u['id']);
     // Populate roles from `user_roles`.
     try {
         $rs = $pdo->prepare('SELECT role FROM user_roles WHERE user_id = :u');
@@ -405,7 +603,8 @@ function complete_totp_login(int $userId): void
     } catch (Throwable $e) { $roles = []; }
     $_SESSION['user_roles'] = $roles;
     $_SESSION['user_role']  = $roles[0] ?? '';
-    unset($_SESSION['totp_verified']);
+    unset($_SESSION['totp_verified'], $_SESSION['pending_totp_user_id']);
+    log_activity((int)$u['id'], 'login', $_SESSION['user_role'] . ';2fa');
     header('Location: ' . ($_SESSION['post_login_redirect'] ?? url_home()));
     unset($_SESSION['post_login_redirect']);
     exit;

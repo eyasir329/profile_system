@@ -63,6 +63,47 @@ while ($attempts < $maxAttempts) {
 
 if (!$pdo) {
     error_log('Database connection error after ' . $maxAttempts . ' attempts: ' . ($lastError ? $lastError->getMessage() : 'unknown'));
-    http_response_code(500);
-    exit('Could not connect to the database. Check your DB_* environment variables and that the database service is running.');
+    // The cause goes to the error log above; visitors get the standalone
+    // "temporarily unavailable" page (it needs no session or database).
+    require_once __DIR__ . '/error_page.php';
+    render_error_page(503, '', minimal: true);
+}
+
+// ---------------------------------------------------------------------------
+// Site timezone (Admin › Site settings, app_settings 'app.timezone'; else the
+// APP_TIMEZONE env var; else UTC). PHP and this connection both use it, so
+// every time shown, every "today" and every chart follows it, and PHP and SQL
+// always agree on what a time string means. Moments are stored as TIMESTAMP
+// (UTC inside, migration 036), so changing the zone never moves one.
+// ---------------------------------------------------------------------------
+$appTimezone = 'UTC';
+$tzEnv = trim((string)getenv('APP_TIMEZONE'));
+if ($tzEnv !== '' && in_array($tzEnv, timezone_identifiers_list(), true)) { $appTimezone = $tzEnv; }
+try {
+    $tzSaved = $pdo->query("SELECT value FROM app_settings WHERE name = 'app.timezone'")->fetchColumn();
+    if (is_string($tzSaved) && in_array($tzSaved, timezone_identifiers_list(), true)) { $appTimezone = $tzSaved; }
+} catch (Throwable $e) { /* app_settings not migrated yet: keep the default */ }
+date_default_timezone_set($appTimezone);
+try {
+    // A named zone follows daylight saving; it needs MariaDB's timezone tables.
+    $pdo->exec('SET time_zone = ' . $pdo->quote($appTimezone));
+} catch (Throwable $e) {
+    // No timezone tables: today's offset (right except across a DST change).
+    $pdo->exec("SET time_zone = '" . (new DateTimeImmutable('now'))->format('P') . "'");
+}
+unset($tzEnv, $tzSaved);
+
+/** The site timezone, e.g. "Asia/Dhaka". */
+function app_timezone(): string
+{
+    return date_default_timezone_get();
+}
+
+/** "Asia/Dhaka (UTC+06:00)", for notes such as "times are in …". */
+function app_timezone_label(?string $tz = null): string
+{
+    $zone = new DateTimeZone($tz ?? app_timezone());
+    $offset = (new DateTimeImmutable('now', $zone))->format('P');
+    if ($zone->getName() === 'UTC') { return 'UTC'; }
+    return str_replace('_', ' ', $zone->getName()) . ' (UTC' . $offset . ')';
 }
