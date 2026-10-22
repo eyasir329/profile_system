@@ -4,8 +4,10 @@ Thanks for your interest in the project. This is a small, learning-focused PHP
 app, so the contribution bar is intentionally low — but a few conventions keep
 the codebase coherent.
 
-> **Before you start:** read [README.md](README.md) for the architecture and
-> [docs/DIRECTORY.md](docs/DIRECTORY.md) for a file-by-file tour.
+> **Before you start:** set it up with [docs/INSTALL.md](docs/INSTALL.md),
+> read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a file-by-file tour
+> and [docs/DECISIONS.md](docs/DECISIONS.md) for why things are the way
+> they are. A change that overturns a decision adds an entry there.
 
 ---
 
@@ -15,8 +17,8 @@ the codebase coherent.
    (`fix/admin-search-sql`, `feat/new-section-grants`, ...).
 2. **Make focused commits.** One logical change per commit. Imperative mood in
    the subject (`add`, `fix`, `refactor`, not `added` / `fixed`).
-3. **Write a migration** for every DB schema change. See [Adding a new
-   migration](README.md#adding-a-new-migration).
+3. **Write a migration** for every DB schema change. See [How the schema
+   evolves](docs/ARCHITECTURE.md#how-the-schema-evolves).
 4. **Update CHANGELOG.md** under the `[Unreleased]` section.
 5. **Test end-to-end** by running `docker compose up -d` and clicking through
    every page that touches your change. Migration apply line should appear in
@@ -32,8 +34,10 @@ the codebase coherent.
 
 - **Strict types everywhere:** every file starts with
   `<?php declare(strict_types=1);`.
-- **No frameworks, no Composer.** Stick to the PHP standard library and the
-  project's own `includes/` helpers.
+- **No frameworks.** Stick to the PHP standard library and the project's
+  own `src/includes/` helpers. The one Composer package is PHPMailer,
+  committed in `src/vendor/`; adding another needs an entry in
+  `docs/DECISIONS.md`.
 - **Output escaping:** always use the `e()` helper. Never `echo` raw user
   input. Render server-validated errors as `<div class="field-error">` next to
   the field.
@@ -54,29 +58,34 @@ the codebase coherent.
 
 ### HTML
 
-- Use the shared partials (`includes/header.php`, `includes/footer.php`). Don't
+- Use the shared partials (`src/includes/header.php`, `src/includes/footer.php`). Don't
   open `<html>` or `<head>` yourself — set `$page_title` and `$page_id`
   variables instead.
 - Every form input gets a `<label>`. Every button has clear text. Focus rings
   are always visible (they come from `app.css`; don't override `outline`).
-- Use `<dialog>` for confirm modals. Don't write your own modal CSS.
+- Use the shared confirm dialog (`x-confirm` on the `<form>`, or
+  `PS.confirm()`; see docs/FRONTEND.md). Don't write your own modal.
 
 ### CSS
 
-- One file (`assets/css/app.css`). New components go at the bottom, with a
-  comment banner like `/* === Buttons === */`.
-- Prefer existing design tokens (CSS custom properties at the top of the file).
-  If you need a new color, add it as a token, don't sprinkle the hex code.
-- Mobile-first. Default styles assume narrow screens; widen at min-width
-  media queries.
+- Source is in `resources/css/` (Tailwind CSS v4). Anything that repeats is
+  a named class in `resources/css/components/`; utilities are for one-off
+  layout. See [docs/COMPONENTS.md](docs/COMPONENTS.md).
+- Use the semantic tokens from `resources/css/theme.css` (`bg-layer`,
+  `text-foreground`, ...), never raw palette colours or hex codes, so dark
+  mode keeps working.
+- Mobile-first, and nothing may make the page scroll sideways from 320 px
+  up ([docs/FRONTEND.md](docs/FRONTEND.md), "Responsive rules").
+- Run `make assets` and commit the rebuilt `public/assets/` with your
+  change.
 
 ### JS
 
-- One file (`assets/js/app.js`). New utilities attach to `window.PS`.
-- Pure DOM. No framework, no bundler. If your snippet has more than ~30 lines
-  of logic, consider if it belongs in `app.js` or a separate inline script.
-- Respect `prefers-reduced-motion` (the CSS already does for entrance
-  animations).
+- Source is in `resources/js/`: Alpine.js stores and components in `ui.js`,
+  the profile editor in `profile-editor.js`, bundled by esbuild into
+  `public/assets/js/app.js` (`make assets`).
+- Keep behaviour in Alpine; don't add a second UI library.
+- Respect `prefers-reduced-motion`.
 
 ### SQL
 
@@ -108,8 +117,8 @@ curl -sS -o /dev/null -w "GET /reset_password.php -> %{http_code}\n" http://loca
 curl -sS -o /dev/null -w "GET /admin/index.php -> %{http_code}\n" http://localhost:8080/admin/index.php
 curl -sS -o /dev/null -w "GET /admin/user.php?id=1 -> %{http_code}\n" http://localhost:8080/admin/user.php?id=1
 
-# 4. Try a public profile.
-curl -sS -o /dev/null -w "GET /u/<some-username> -> %{http_code}\n" http://localhost:8080/u/<some-username>
+# 4. Syntax-check every PHP file (inside the container).
+make lint
 ```
 
 Then click through in the browser for any page that renders dynamic content
@@ -121,8 +130,9 @@ Then click through in the browser for any page that renders dynamic content
 - [ ] `docker compose logs web` shows the schema + migrations apply cleanly
 - [ ] All pages above return 200 (or 302 redirect to login)
 - [ ] No new errors in `docker compose logs web`
-- [ ] `grep -R "style.css" --exclude-dir=node_modules` returns no matches (the
-      old CSS file should stay deleted)
+- [ ] `make lint` prints nothing
+- [ ] If you changed `resources/`, `make assets` ran and `public/assets/` is
+      committed
 - [ ] `.env` is **not** committed; `.env.example` **is** updated if any new
       env var was added
 - [ ] CHANGELOG.md is updated under `[Unreleased]`
@@ -152,10 +162,10 @@ If your change touches any of the following, take the tunnel case into
 account:
 
 - **Session cookie / `Secure` flag logic.** The logic lives in
-  `includes/auth.php` and is governed by `COOKIE_SECURE=1` and
+  `src/includes/auth.php` and is governed by `COOKIE_SECURE=1` and
   `TRUST_PROXY=1`. Don't short-circuit it with `!empty($_SERVER['HTTPS'])`
   alone — that's only true on the direct-HTTP path.
-- **`client_ip()`** in `includes/ratelimit.php` honors
+- **`client_ip()`** in `src/includes/ratelimit.php` honors
   `TRUST_PROXY=1` + `X-Forwarded-For` to figure out the real remote IP.
   Anything that adds a new rate-limited bucket (or any other
   IP-keyed cache) should reuse `client_ip()`, never
@@ -171,7 +181,7 @@ account:
 - **New endpoints that the public can hit.** Even if they're not
   rate-limited today, they should at minimum be CSRF-protected and
   validate their inputs with the existing helpers in
-  `includes/validate.php`.
+  `src/includes/validate.php`.
 
 ---
 

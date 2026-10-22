@@ -2,13 +2,15 @@
 
 How Profile System looks and behaves, and why. Read this before changing
 the visual design; read [`COMPONENTS.md`](COMPONENTS.md) for the class
-reference and [`FRONTEND.md`](FRONTEND.md) for the build.
+reference and [`FRONTEND.md`](FRONTEND.md) for the build. Decisions beyond
+the interface (stack, data, security, features) are in
+[`DECISIONS.md`](DECISIONS.md).
 
 ## 1. What the product is
 
 A private member register for a research lab. Students keep their own
-profile (education, publications, skills, lab details); teachers read all
-of them as a directory; admins manage accounts. It is a records tool that
+lab details, theses, papers, publications and awards; teachers read all
+of them as one sheet; admins manage accounts. It is a records tool that
 people open a few times a term, not a product they live in.
 
 That decides the tone: quiet, legible, closer to a well-set document than
@@ -219,6 +221,7 @@ from Settings → Appearance) and puts `class="dark"` on `<html>`. For
 
 - JavaScript is required for the account menu, the role switcher and the
   profile editor.
-- No `Content-Security-Policy` header is sent yet. Alpine's standard build
-  evaluates expressions at runtime; adopting a strict CSP later means
-  switching to `@alpinejs/csp` and moving inline expressions into `ui.js`.
+- The `Content-Security-Policy` (in `docker/apache/app.conf`) still allows
+  `'unsafe-inline'` and `'unsafe-eval'`: Alpine's standard build evaluates
+  expressions at runtime. A strict policy means switching to
+  `@alpinejs/csp` and moving inline expressions into `ui.js`.

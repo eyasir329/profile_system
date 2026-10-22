@@ -11,6 +11,30 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Documentation: install from nothing, architecture, decisions
+
+- **`docs/INSTALL.md`**: running the app on a computer with nothing
+  installed, for Windows (WSL 2 + Docker Desktop), macOS and Linux:
+  requirements, installing Docker/Git/make, `.env`, first start and first
+  admin, everyday commands, the plain `docker compose` equivalents of
+  every `make` target, moving data to another computer, going live, and
+  a troubleshooting table.
+- **`docs/ARCHITECTURE.md`**: a tour from the repository root (every
+  folder and file), the request lifecycle, the data model, the
+  containers, and where to make common changes.
+- **`docs/DECISIONS.md`**: the reasons behind the stack, infrastructure,
+  data model, security, every feature and the interface, with the options
+  considered and the costs, plus the rules that guided them and a
+  timeline. Reasons not written down at the time are marked *inferred*.
+- **`.gitattributes`** keeps shell scripts, SQL and config in Linux line
+  endings, so a clone on Windows (`core.autocrlf=true`) no longer breaks
+  the web container's entrypoint.
+- Out-of-date docs fixed: CONTRIBUTING.md (no more `docs/DIRECTORY.md`,
+  "no Composer", single hand-written CSS/JS file, public profiles),
+  DESIGN.md (the CSP *is* sent; what a profile holds), the Makefile's
+  note that Git Bash bundles `make` (it doesn't), and `make up` no longer
+  prints an Adminer address for a service it didn't start.
+
 ### Responsive on every device, and a new home page
 
 Every page was opened for each role at nine screen sizes (320 to 1920 px,
