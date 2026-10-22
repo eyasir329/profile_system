@@ -70,7 +70,10 @@ possible only while the course is still the current one.
 
 ## Quick start
 
-Needs Docker with Compose v2, and `make`.
+Needs Docker with Compose v2, Git, and (optionally) `make`. Nothing else:
+PHP, MariaDB, Apache and Node all run in containers. **Setting up a
+computer that has none of these yet** (Windows, macOS or Linux): follow
+[`docs/INSTALL.md`](docs/INSTALL.md), step by step.
 
 ```bash
 cp .env.example .env      # then set real passwords in .env
@@ -132,8 +135,13 @@ src/includes/        shared PHP
 resources/           CSS and JS source (Tailwind v4, Alpine.js)
 database/            schema.sql + migrations/ (applied in name order on start)
 docker/              container entrypoint and DB bootstrap
-docs/                DESIGN, COMPONENTS, FRONTEND, PERMISSIONS, TUNNEL
+docs/                INSTALL, ARCHITECTURE, DECISIONS, DESIGN, COMPONENTS,
+                     FRONTEND, PERMISSIONS, SECURITY, TUNNEL
+tools/               responsive-audit.js (Playwright; not part of the app)
 ```
+
+The full tour, with what every file does and how a request moves through
+the code, is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Database
 
@@ -168,6 +176,9 @@ completion and its saved copy; `028` to `031` potential journals (`030` gives th
 
 | Doc | Covers |
 | --- | --- |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Running it on a new computer with nothing installed (Windows, macOS, Linux), everyday commands, moving data between machines, going live, troubleshooting |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Every folder and file from the repository root, the request lifecycle, the data model, the containers, where to make common changes |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why: every stack, infrastructure, data, security, feature and interface decision, with the options considered and the trade-offs |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | The October 2026 security audit, how sign-in, sessions and data are protected, known limits, and the checklist for running it |
 | [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | Who can create, read, update and delete what, and where it is enforced |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Stack decisions, design tokens, layout and behaviour rules |

@@ -7,9 +7,10 @@
 #
 # Prerequisites:
 #   - Docker (Docker Desktop on macOS/Windows; docker.io on Linux)
-#   - make (preinstalled on Linux/macOS; on Windows use Git Bash, which
-#     bundles GNU make)
+#   - make (Linux: your package manager; macOS: `xcode-select --install`;
+#     Windows: run inside WSL 2, or use the plain `docker compose` commands)
 #
+# Setting up a new computer from nothing: docs/INSTALL.md.
 # Run `make help` to see every target. Run `make up` to start.
 
 # Use bash so we get sane error handling even when invoked from
@@ -63,7 +64,7 @@ up: require-docker ## Build (if needed) and start the stack in the background.
 	docker compose up -d --build
 	@printf "\n\033[1;32m✔ Up.\033[0m\n"
 	@printf "  Web:     \033[1mhttp://localhost:$${WEB_PORT:-8080}/\033[0m\n"
-	@printf "  Adminer: \033[1mhttp://localhost:$${ADMINER_PORT:-8081}/\033[0m\n\n"
+	@printf "  Adminer: \033[1mmake tools\033[0m, then http://localhost:$${ADMINER_PORT:-8081}/\n\n"
 
 .PHONY: down
 down: require-docker ## Stop the stack (keeps data volumes).
