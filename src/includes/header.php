@@ -72,7 +72,10 @@ $NAV_ITEMS_BY_ROLE = [
     'student' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
         ['href' => 'profile',     'label' => 'My profile',  'page' => 'profile'],
+        ['href' => 'students',    'label' => 'Students',    'page' => 'students'],
         ['href' => 'resources',   'label' => 'Resources',   'page' => 'resources'],
+        // External link (opens in a new tab): items with a 'url' skip $NAV_HREF_FOR.
+        ['url' => 'https://equipment-tracker-hazel.vercel.app/home', 'label' => 'Lab Equipment Access', 'external' => true],
     ],
     'teacher' => [
         ['href' => 'dashboard',   'label' => 'Dashboard',   'page' => 'dashboard'],
@@ -148,6 +151,10 @@ $themeAttr = in_array($_COOKIE['ps_theme'] ?? '', ['light', 'dark', 'auto'], tru
 // small-screen drawer both render from it.
 $navLinks = [];
 foreach ($navItems as $item) {
+    if (!empty($item['url'])) {
+        $navLinks[] = [(string)$item['url'], (string)$item['label'], false, true];
+        continue;
+    }
     $fn = $NAV_HREF_FOR[$item['href']] ?? null;
     if ($fn === null) { continue; }
     $pid = (string)($item['page'] ?? '');
@@ -155,6 +162,7 @@ foreach ($navItems as $item) {
         $fn(),
         (string)$item['label'],
         $pid !== '' && ($page_id === $pid || ($pid !== 'admin' && str_starts_with((string)$page_id, $pid))),
+        false,
     ];
 }
 $sortedRoles = $myRoles;
@@ -163,7 +171,7 @@ usort($sortedRoles, function ($a, $b) use ($displayOrder) {
     $ib = array_search($b, $displayOrder, true);
     return ($ia === false ? 999 : $ia) <=> ($ib === false ? 999 : $ib);
 });
-$myFirstName = explode(' ', trim($myName))[0] ?: 'Account';
+$myFirstName = first_name($myName) ?: 'Account';
 $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23233a6b'/%3E%3Cpath d='M11 23V9h6.2a4.4 4.4 0 0 1 0 8.8H11' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
 ?>
 <!doctype html>
@@ -208,8 +216,8 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
     </a>
 
     <nav class="nav-links" aria-label="Primary">
-      <?php foreach ($navLinks as [$url, $label, $isCurrent]): ?>
-        <a class="nav-link" href="<?= e($url) ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+      <?php foreach ($navLinks as [$url, $label, $isCurrent, $external]): ?>
+        <a class="nav-link" href="<?= e($url) ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $external ? ' target="_blank" rel="noopener noreferrer"' : '' ?>><?= e($label) ?></a>
       <?php endforeach; ?>
     </nav>
 
@@ -318,8 +326,8 @@ $favicon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
   <!-- Small screens: everything in one drawer -->
   <div class="nav-drawer" id="nav-drawer" x-show="drawer" x-cloak x-transition.opacity.duration.100ms>
     <nav aria-label="Primary">
-      <?php foreach ($navLinks as [$url, $label, $isCurrent]): ?>
-        <a href="<?= e($url) ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+      <?php foreach ($navLinks as [$url, $label, $isCurrent, $external]): ?>
+        <a href="<?= e($url) ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $external ? ' target="_blank" rel="noopener noreferrer"' : '' ?>><?= e($label) ?></a>
       <?php endforeach; ?>
       <?php if ($activeRole !== 'student'): ?>
         <a href="<?= e(url_profile()) ?>"<?= $page_id === 'profile' ? ' aria-current="page"' : '' ?>>My profile</a>

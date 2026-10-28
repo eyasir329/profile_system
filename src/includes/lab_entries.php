@@ -4,15 +4,17 @@ declare(strict_types=1);
 /**
  * Lab entries: the parts of a student's record that hold several items.
  *
- * Seven repeating sections, edited by the student on /profile.php. The
- * three main-sheet columns are read by teachers on the Students page; the
- * four sheet sections are read by everyone on /resources.php (one tab
- * each, every student's rows):
+ * Five repeating sections, edited by the student on /profile.php. The
+ * thesis column is read by teachers on the Students page; the four sheet
+ * sections are read by everyone on /resources.php (one tab each, every
+ * student's rows):
  *
- *   From "Information of Lab Students" (one column each):
+ *   From "Information of Lab Students":
  *     completed_thesis    [Level: Title]                  table lab_entries
- *     journal_papers      {published}({submitted})        table lab_entries
- *     conference_papers   {published}({submitted})        table lab_entries
+ *
+ * Journal and conference papers are NOT entries any more: each is just two
+ * numbers, published and submitted, stored in profiles.journal_papers /
+ * profiles.conference_papers as "3(1)" (see paper_* helpers below).
  *   One workbook sheet each (the second workbook):
  *     pub_journals        PublishedJournals                table lab_publications
  *     pub_proceedings     Conf.Proceedings                 table lab_publications
@@ -79,20 +81,6 @@ function lab_entry_defs(): array
                             'options' => array_combine($l = ['Associate', 'Bachelor', 'Master', 'Doctor', 'Other'], $l)],
                 'title' => $title + ['placeholder' => 'Title of the thesis'],
             ],
-        ],
-        'journal_papers' => [
-            'table' => 'lab_entries', 'kind' => 'journal', 'sheet' => null,
-            'title' => 'Journal papers', 'singular' => 'journal paper',
-            'desc' => 'One entry per paper. The Students sheet shows them as {published}(submitted).',
-            'row_title' => 'title', 'row_meta' => ['status'],
-            'fields' => ['title' => $title + ['placeholder' => 'Title of the paper'], 'status' => $status],
-        ],
-        'conference_papers' => [
-            'table' => 'lab_entries', 'kind' => 'conference', 'sheet' => null,
-            'title' => 'Conference papers', 'singular' => 'conference paper',
-            'desc' => 'One entry per paper. The Students sheet shows them as {published}(submitted).',
-            'row_title' => 'title', 'row_meta' => ['status'],
-            'fields' => ['title' => $title + ['placeholder' => 'Title of the paper'], 'status' => $status],
         ],
         'pub_journals' => [
             'table' => 'lab_publications', 'kind' => 'journal', 'sheet' => 'PublishedJournals',
@@ -196,27 +184,77 @@ function entries_for_sheet(PDO $pdo, string $section): array
 }
 
 /**
- * Rewrite the profiles text column of a main-sheet section (the three
- * with no `sheet`) from its entries, in the workbook's format, so the
- * Students sheet and the completeness meter read it:
+ * Rewrite the profiles text column of a main-sheet section (the ones with
+ * no `sheet`) from its entries, in the workbook's format, so the Students
+ * sheet and the completeness meter read it:
  *   thesis   one "[Level: Title]" per line
- *   papers   "{published}(submitted)", then one "Title (status)" per line
  * Sections that are their own sheet have no text column; nothing to do.
  */
 function entries_sync_text(PDO $pdo, int $userId, string $section): void
 {
     $def = lab_entry_defs()[$section];
-    if ($def['sheet'] !== null) { return; }
+    if ($def['sheet'] !== null || $def['kind'] !== 'thesis') { return; }
     $rows = entries_for($pdo, $userId)[$section];
-    if (!$rows) {
-        $text = null;
-    } elseif ($def['kind'] === 'thesis') {
-        $text = implode("\n", array_map(fn($r) => '[' . ($r['level'] ?: 'Other') . ': ' . $r['title'] . ']', $rows));
-    } else {
-        $pub  = count(array_filter($rows, fn($r) => $r['status'] === 'published'));
-        $text = '{' . $pub . '}(' . (count($rows) - $pub) . ')' . "\n"
-            . implode("\n", array_map(fn($r) => $r['title'] . ' (' . $r['status'] . ')', $rows));
-    }
+    $text = $rows
+        ? implode("\n", array_map(fn($r) => '[' . ($r['level'] ?: 'Other') . ': ' . $r['title'] . ']', $rows))
+        : null;
     // $section is a key of lab_entry_defs() that is also a profiles column.
     $pdo->prepare("UPDATE profiles SET `$section` = :t WHERE user_id = :u")->execute(['t' => $text, 'u' => $userId]);
+}
+
+// ============================================================================
+// Paper counts: journal_papers / conference_papers
+//
+// Two numbers per column, {published} and (submitted), kept as the text
+// "3(1)" in profiles.journal_papers / profiles.conference_papers. Teachers
+// read that text as is. Older records may hold "{3}(1)" followed by one
+// "Title (status)" line per paper; paper_counts() reads those too.
+// ============================================================================
+
+/** The profiles columns that hold paper counts. */
+const LAB_PAPER_COLUMNS = ['journal_papers', 'conference_papers'];
+
+/** Largest count accepted in either box. */
+const LAB_PAPER_MAX = 9999;
+
+/**
+ * [published, submitted] read from a stored value ("3(1)", "{3}(1)", or an
+ * older multi-line value whose first line is the count), or null when the
+ * value is empty or holds no count.
+ */
+function paper_counts(?string $text): ?array
+{
+    $first = trim(explode("\n", str_replace("\r", '', (string)$text))[0]);
+    if (preg_match('/^\{?\s*(\d{1,4})\s*\}?\s*\(\s*(\d{1,4})\s*\)$/', $first, $m)) {
+        return [(int)$m[1], (int)$m[2]];
+    }
+    return null;
+}
+
+/** The stored text for two counts: "3(1)". */
+function paper_format(int $published, int $submitted): string
+{
+    return $published . '(' . $submitted . ')';
+}
+
+/**
+ * What teachers see for a stored value: "3(1)". A value with no readable
+ * count (e.g. free text typed by an admin) is shown as it is.
+ */
+function paper_display(?string $text): string
+{
+    $c = paper_counts($text);
+    return $c ? paper_format($c[0], $c[1]) : trim((string)$text);
+}
+
+/**
+ * One count from a form value: '' counts as 0, otherwise whole digits
+ * only. Returns the number, or null when the value is not acceptable.
+ */
+function paper_count_input(string $raw): ?int
+{
+    $raw = trim($raw);
+    if ($raw === '') { return 0; }
+    if (!preg_match('/^\d{1,4}$/', $raw)) { return null; }
+    return min((int)$raw, LAB_PAPER_MAX);
 }

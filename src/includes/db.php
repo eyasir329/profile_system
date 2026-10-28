@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Load hosting-panel settings when running on shared hosting.
+require_once __DIR__ . '/hosting_config.php';
+
 /**
  * Database connection.
  *
@@ -25,11 +28,13 @@ declare(strict_types=1);
  * non-root account created by the web entrypoint.
  */
 
-$host    = getenv('DB_HOST')     ?: 'profile_db';
-$port    = getenv('DB_PORT')     ?: '3306';
-$dbname  = getenv('DB_NAME')     ?: 'profile_system';
-$user    = getenv('APP_DB_USER') ?: (getenv('DB_USER') ?: 'root');
-$pass    = getenv('DB_APP_PASSWORD') ?: (getenv('DB_PASSWORD') ?: 'rootpass');
+// app_env() is defined in hosting_config.php (loaded above).
+
+$host    = app_env('DB_HOST', 'profile_db');
+$port    = app_env('DB_PORT', '3306');
+$dbname  = app_env('DB_NAME', 'profile_system');
+$user    = app_env('APP_DB_USER', app_env('DB_USER', 'root'));
+$pass    = app_env('DB_APP_PASSWORD', app_env('DB_PASSWORD', 'rootpass'));
 $charset = 'utf8mb4';
 
 // DSN with port. mariadb / mysql client libs accept the unix socket fallback
@@ -40,34 +45,33 @@ $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
+    // Avoid tying up a free-hosting PHP worker indefinitely on an unreachable DB.
+    PDO::ATTR_TIMEOUT            => 3,
 ];
 
-// Retry briefly while the DB container boots. This handles the
-// "DB not ready yet on first start" race without failing the request.
-$attempts = 0;
-$maxAttempts = 10;
+// Shared hosting should fail fast instead of retrying a failed connection
+// ten times per request. A database outage should not exhaust PHP workers.
 $lastError = null;
 $pdo = null;
 
-while ($attempts < $maxAttempts) {
-    try {
-        $pdo = new PDO($dsn, $user, $pass, $options);
-        break;
-    } catch (PDOException $e) {
-        $lastError = $e;
-        $attempts++;
-        if ($attempts >= $maxAttempts) { break; }
-        usleep(500_000); // 0.5s
-    }
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (PDOException $e) {
+    $lastError = $e;
 }
 
 if (!$pdo) {
-    error_log('Database connection error after ' . $maxAttempts . ' attempts: ' . ($lastError ? $lastError->getMessage() : 'unknown'));
+    error_log('Database connection failed: ' . ($lastError ? $lastError->getMessage() : 'unknown'));
     // The cause goes to the error log above; visitors get the standalone
     // "temporarily unavailable" page (it needs no session or database).
     require_once __DIR__ . '/error_page.php';
     render_error_page(503, '', minimal: true);
 }
+
+// utf8mb4 with a collation that keeps Japanese apart: unicode_ci treats
+// ハ/バ/パ and は/ハ as equal (so "ハハ" = "パパ" in searches and unique
+// keys); general_ci does not. Matches database/037_utf8mb4_japanese.sql.
+$pdo->exec('SET NAMES utf8mb4 COLLATE utf8mb4_general_ci');
 
 // ---------------------------------------------------------------------------
 // Site timezone (Admin › Site settings, app_settings 'app.timezone'; else the
@@ -77,7 +81,7 @@ if (!$pdo) {
 // (UTC inside, migration 036), so changing the zone never moves one.
 // ---------------------------------------------------------------------------
 $appTimezone = 'UTC';
-$tzEnv = trim((string)getenv('APP_TIMEZONE'));
+$tzEnv = trim(app_env('APP_TIMEZONE', ''));
 if ($tzEnv !== '' && in_array($tzEnv, timezone_identifiers_list(), true)) { $appTimezone = $tzEnv; }
 try {
     $tzSaved = $pdo->query("SELECT value FROM app_settings WHERE name = 'app.timezone'")->fetchColumn();

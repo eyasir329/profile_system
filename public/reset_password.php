@@ -55,6 +55,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
         $newHash = password_hash($vPw['value'], PASSWORD_DEFAULT);
         $pdo->beginTransaction();
         try {
+            // Claim this link first, in one statement: of two requests sent
+            // at once with the same link, only one can use it.
+            $claim = $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = :id AND used_at IS NULL AND expires_at > NOW()');
+            $claim->execute(['id' => (int)$row['id']]);
+            if ($claim->rowCount() !== 1) {
+                $pdo->rollBack();
+                $validToken = false;
+                throw new LogicException('reset link already used');
+            }
             $pdo->prepare('UPDATE users SET password_hash = :h WHERE id = :u')->execute(['h' => $newHash, 'u' => $userId]);
             $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :u AND used_at IS NULL')->execute(['u' => $userId]);
             $pdo->commit();
@@ -66,8 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             header('Location: ' . url_login() . '?reset=1');
             exit;
         } catch (Throwable $e) {
-            $pdo->rollBack();
-            $errors['password'] = 'Could not update password. Please try again.';
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            // $validToken is false when the link was used meanwhile: the
+            // page then says it is invalid instead.
+            if ($validToken) { $errors['password'] = 'Could not update password. Please try again.'; }
         }
     }
 }

@@ -1,0 +1,40 @@
+# Profile System — InfinityFree / Byet.host / Apache shared hosting
+Options -Indexes
+
+# Every page and text file is UTF-8 (Japanese content).
+AddDefaultCharset UTF-8
+AddCharset UTF-8 .css .js .txt
+
+RewriteEngine On
+
+# Force HTTP to HTTPS. InfinityFree terminates SSL in front of Apache, so
+# also trust its X-Forwarded-Proto header (otherwise: a redirect loop).
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# Block direct access to private project folders and deployment artifacts.
+RewriteRule ^(src|database|docker|tools|resources|docs|backups|vendor|node_modules)(/|$) - [F,L,NC]
+RewriteRule (^|/)\.(?!well-known/) - [F,L]
+RewriteRule (^|/)(composer\.(json|lock)|package(-lock)?\.json|Dockerfile|compose\.yml|Makefile|README(\.txt|\.md)?|CHANGELOG\.md)$ - [F,L,NC]
+RewriteRule \.(sql|sql\.gz|zip|tar|tgz|gz|bak|old|orig|swp|log|env|ini|sh)$ - [F,L,NC]
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+  Header always set X-Frame-Options "DENY"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+  Header always unset X-Powered-By
+  Header unset X-Powered-By
+</IfModule>
+
+# Credentials file (InfinityFree does not allow files above htdocs).
+<Files "hosting_config.php">
+    Require all denied
+</Files>
+
+ErrorDocument 403 /error.php?code=403
+ErrorDocument 404 /error.php?code=404

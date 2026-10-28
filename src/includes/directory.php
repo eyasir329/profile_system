@@ -41,6 +41,7 @@ require_once __DIR__ . '/lab_entries.php';
 require_once __DIR__ . '/ui.php';
 
 $isAdmin  = $DIR['scope'] === 'users';
+// Teachers and students get the same view of the Students sheet.
 $baseUrl  = (string)$DIR['base'];
 $editUrl  = fn(int $id): string => url_admin_user() . '?id=' . $id;
 
@@ -73,14 +74,13 @@ $XLSX_COLUMNS = [
     'next_step'           => ["Next step\n(進路)", 'pre'],
     'previous_univ_level' => ['Previous Univ/Level', 'pre'],
     'completed_thesis'    => ["Completed Thesis Titles (If any)\n[Level: Title]", 'wide pre'],
-    'journal_papers'      => ["Journal Papers\n{published}({submitted})", 'wide pre'],
-    'conference_papers'   => ["Conference Papers\n{published}({submitted})", 'wide pre'],
+    'journal_papers'      => ["Journal Papers\n{published}({submitted})", 'nowrap num'],
+    'conference_papers'   => ["Conference Papers\n{published}({submitted})", 'nowrap num'],
 ];
-// Paper columns hold "{published}(submitted)" on the first line and one
-// "Title (status)" line per paper below it (see entries_sync_text() in
-// profile.php). The sheet cell lists the papers; the count is shown only
-// when there are no titles (old records that hold just the count).
-$PAPER_COLUMNS = ['journal_papers', 'conference_papers'];
+// Paper columns hold the two counts the student typed, as "published(submitted)",
+// e.g. 3(1) (see paper_display() in lab_entries.php, which also reads older
+// records that have the count on the first line and a title list below it).
+$PAPER_COLUMNS = LAB_PAPER_COLUMNS;
 // The workbook lists people course by course, most senior first.
 $COURSE_ORDER = array_flip(['D3', 'D2', 'D1', 'M2', 'M1', 'B4', 'B3', 'R', 'Other']);
 
@@ -196,14 +196,11 @@ if (isset($_GET['id'])) {
               <dt><?= e($def['label']) ?></dt>
               <?php
                   $v = $labValues[$key];
-                  $multi = in_array($key, ['completed_thesis', 'journal_papers', 'conference_papers'], true) && str_contains($v, "\n");
-                  if ($multi) {
-                      $lines = explode("\n", $v);
-                      // Papers: the {published}(submitted) count first, then the papers.
-                      $lead  = $key === 'completed_thesis' ? '' : array_shift($lines);
-                  }
+                  if (in_array($key, $PAPER_COLUMNS, true)) { $v = paper_display($v); }  // 3(1)
+                  $multi = $key === 'completed_thesis' && str_contains($v, "\n");
+                  if ($multi) { $lines = explode("\n", $v); }
               ?>
-              <dd class="whitespace-pre-line"><?php if ($v === ''): ?><span class="faint">Not set</span><?php elseif ($multi): ?><?= $lead !== '' ? '<span class="faint">' . e($lead) . '</span>' : '' ?><?= ui_multi($lines) ?><?php else: ?><?= e($v) ?><?php endif; ?></dd>
+              <dd class="whitespace-pre-line"><?php if ($v === ''): ?><span class="faint">Not set</span><?php elseif ($multi): ?><?= ui_multi($lines) ?><?php else: ?><?= e($v) ?><?php endif; ?></dd>
             </div>
           <?php endforeach; ?>
         </dl>
@@ -404,7 +401,10 @@ if ($view === 'sheet' && ($_GET['export'] ?? '') === 'csv') {
     fputcsv($out, $head, ',', '"', '', "\r\n");
     foreach ($students as $s) {
         $row = [];
-        foreach ($XLSX_COLUMNS as $key => $_) { $row[] = $safe(trim((string)($s[$key] ?? ''))); }
+        foreach ($XLSX_COLUMNS as $key => $_) {
+            $v = trim((string)($s[$key] ?? ''));
+            $row[] = $safe(in_array($key, $PAPER_COLUMNS, true) ? paper_display($v) : $v);
+        }
         if ($group === 'completed') { $row[] = str_replace('-', '/', substr((string)$s['course_completed_at'], 0, 7)); }
         fputcsv($out, $row, ',', '"', '', "\r\n");
     }
@@ -549,9 +549,8 @@ require __DIR__ . '/header.php';
                     <th scope="row" class="<?= $class ?>">
                       <a href="<?= e($baseUrl . '?id=' . (int)$s['id']) ?>"><?= e($value !== '' ? $value : (string)$s['name']) ?></a>
                     </th>
-                  <?php elseif (in_array($key, $PAPER_COLUMNS, true) && $value !== ''):
-                      $lines = explode("\n", $value); ?>
-                    <td class="<?= $class ?>"><?= ui_multi(count($lines) > 1 ? array_slice($lines, 1) : $lines) ?></td>
+                  <?php elseif (in_array($key, $PAPER_COLUMNS, true) && $value !== ''): ?>
+                    <td class="<?= $class ?>"><?= e(paper_display($value)) ?></td>
                   <?php elseif ($key === 'completed_thesis' && $value !== ''): ?>
                     <td class="<?= $class ?>"><?= ui_multi(explode("\n", $value)) ?></td>
                   <?php elseif ($key === 'email' && $value !== ''): ?>

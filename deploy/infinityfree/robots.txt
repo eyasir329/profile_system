@@ -1,0 +1,3 @@
+# Profile System is a private, members-only register: nothing to index.
+User-agent: *
+Disallow: /

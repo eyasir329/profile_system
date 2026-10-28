@@ -1,12 +1,13 @@
 <?php
 /**
- * Teacher's student directory (read-only).
+ * Student directory (read-only), for teachers and students.
  *
  * Route:  GET /students.php               every field of every student in one wide table
  *                                         (sheet only: there is no list view here)
  *         GET /students.php?id=<id>       one student's full profile
- * Auth:   require_login(); the ACTIVE role must be teacher. Admins manage
- *         accounts on /admin/ and have no Students sheet.
+ * Auth:   require_login(); the ACTIVE role must be teacher or student.
+ *         Admins manage accounts on /admin/ and have no Students sheet.
+ *         Students see exactly the same sheet as teachers (read-only).
  *
  * Lists every active user who holds the student role. The page itself is
  * rendered by src/includes/directory.php (shared with /admin/index.php);
@@ -22,9 +23,10 @@ ensure_active_role_valid();
 
 $page_id = 'students';
 
-if (active_user_role() !== 'teacher') {
+$viewer = active_user_role();
+if (!in_array($viewer, ['teacher', 'student'], true)) {
     require_once __DIR__ . '/../src/includes/error_page.php';
-    render_error_page(403, 'The Students sheet is for teachers.');
+    render_error_page(403, 'The Students sheet is for teachers and students.');
 }
 
 $DIR = [

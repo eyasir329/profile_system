@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Load hosting-panel settings when running on shared hosting.
+require_once __DIR__ . '/hosting_config.php';
+
 // First, so a crash anywhere after this shows the error page, not a blank one.
 require_once __DIR__ . '/error_page.php';
 install_error_page_handlers();
@@ -21,9 +24,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     //     tells us the original scheme was https via X-Forwarded-Proto.
     // COOKIE_SECURE=1 forces the flag on regardless (for setups that
     // are always HTTPS, e.g. a permanent tunnel / load balancer).
-    $cookieSecure = getenv('COOKIE_SECURE') === '1';
+    $cookieSecure = app_env('COOKIE_SECURE') === '1';
     if (!$cookieSecure) {
-        $trustProxy   = getenv('TRUST_PROXY') === '1';
+        $trustProxy   = app_env('TRUST_PROXY') === '1';
         $directHttps  = !empty($_SERVER['HTTPS']) && strcasecmp((string)$_SERVER['HTTPS'], 'off') !== 0;
         $forwardedHttps = $trustProxy
             && isset($_SERVER['HTTP_X_FORWARDED_PROTO'])
@@ -557,7 +560,7 @@ function require_totp_or_login(): void
         $pdo = auth_pdo();
         if ($pdo === null) { http_response_code(500); exit('DB unavailable'); }
         if (!in_array(second_factor_check($pendingId, $code), ['totp', 'backup'], true)) {
-            http_response_code(401);
+            // A redirect, not a 401: browsers do not follow Location on a 401.
             $_SESSION['totp_error'] = 'Wrong code. Try again.';
             header('Location: login_totp.php');
             exit;

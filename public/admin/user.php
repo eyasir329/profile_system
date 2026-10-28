@@ -37,6 +37,7 @@ require_once __DIR__ . '/../../src/includes/db.php';
 require_once __DIR__ . '/../../src/includes/url.php';
 require_once __DIR__ . '/../../src/includes/validate.php';
 require_once __DIR__ . '/../../src/includes/lab_fields.php';
+require_once __DIR__ . '/../../src/includes/lab_entries.php';
 require_once __DIR__ . '/../../src/includes/ui.php';
 require_once __DIR__ . '/../../src/includes/mail_templates.php';
 require_once __DIR__ . '/../../src/includes/email_change.php';
@@ -67,8 +68,8 @@ $LAB = [
     'research_title'      => ['textarea', 2000],
 ];
 $DEFS = lab_field_defs();
-// Theses and papers are entries the student adds on their profile; the
-// text here is generated from them, so it is shown read-only.
+// Theses are entries and paper counts are two boxes the student fills in on
+// their profile, so they are shown read-only here (papers as published(submitted)).
 $LAB_ENTRIES = ['completed_thesis', 'journal_papers', 'conference_papers'];
 
 $self = fn(array $q = []): string => url_admin_user() . ($isNew && !isset($q['id']) ? '' : '?' . http_build_query(['id' => $q['id'] ?? $userId] + $q));
@@ -486,11 +487,11 @@ require __DIR__ . '/../../src/includes/header.php';
           </div>
           <?php if (!$isNew): ?>
             <dl class="facts is-single is-stacked mt-2">
-              <?php foreach ($LAB_ENTRIES as $col): $v = trim((string)($user[$col] ?? '')); ?>
+              <?php foreach ($LAB_ENTRIES as $col): $v = trim((string)($user[$col] ?? '')); if (in_array($col, LAB_PAPER_COLUMNS, true)) { $v = paper_display($v); } ?>
                 <div><dt><?= e($DEFS[$col]['label']) ?></dt><dd class="whitespace-pre-line"><?= $v !== '' ? e($v) : '<span class="faint">None yet</span>' ?></dd></div>
               <?php endforeach; ?>
             </dl>
-            <p class="mt-3 text-xs text-muted-foreground-1">Theses and papers are entries the student adds on their own profile, so they are read-only here.</p>
+            <p class="mt-3 text-xs text-muted-foreground-1">Theses and paper counts are filled in by the student on their own profile, so they are read-only here.</p>
           <?php endif; ?>
         </section>
 

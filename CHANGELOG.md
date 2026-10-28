@@ -11,6 +11,36 @@ in `migrations/`, applied by the web container's entrypoint in name order.
 
 ## [Unreleased]
 
+### Production release: synced with the live site (profile-system.kesug.com)
+
+The project now matches the code running in production on InfinityFree.
+
+- **Deployment**: `docs/DEPLOYMENT.md` and `deploy/infinityfree/` (Apache
+  rules, `install.sql`, `hosting_config.example.php`, and `build.sh`, which
+  assembles the flat `htdocs/` layout from `public/` + `src/`; its output
+  was checked identical to the production tree apart from the secrets
+  file). `hosting_config.php` (credentials) is git-ignored.
+- **Configuration**: settings are read through `app_env()` (environment,
+  `$_ENV`, `$_SERVER`), because shared hosts disable `putenv()`. No change
+  under Docker. `src/includes/hosting_config.php` loads the optional file.
+- **Japanese text**: migration `037_utf8mb4_japanese.sql` and
+  `SET NAMES utf8mb4 COLLATE utf8mb4_general_ci` on every connection;
+  password length counts characters; `first_name()` splits on the
+  full-width space.
+- **Students sheet** is now also visible (read-only) to students.
+  A "Lab Equipment Access" link opens in a new tab from the top bar.
+- **Journal and conference papers** are two numbers (published, submitted)
+  stored as `3(1)`, no longer lists of entries. Older records still display
+  (`paper_display()`).
+- **Security**: sign-in fails closed when the two-factor status cannot be
+  read; a password-reset link is claimed atomically, so two simultaneous
+  requests cannot both use it; a reset link is shown on screen only when
+  `APP_ENV` is explicitly `development` or `local`; an unauthenticated
+  fetch gets a redirect instead of a 401.
+- **Reliability**: the database connection times out after 3 s and does
+  not retry; the housekeeping marker is per install.
+- **Docs**: README, INSTALL, PERMISSIONS and ARCHITECTURE updated.
+
 ### Documentation: install from nothing, architecture, decisions
 
 - **`docs/INSTALL.md`**: running the app on a computer with nothing

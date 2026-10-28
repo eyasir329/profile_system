@@ -78,7 +78,9 @@ function housekeeping_run(PDO $pdo): array
 function housekeeping_maybe_run(?PDO $pdo): void
 {
     if ($pdo === null) { return; }
-    $marker = sys_get_temp_dir() . '/profile_system_housekeeping';
+    // Per-install name: on shared hosting the temp directory can be shared
+    // with other sites, which must not be able to skip or block our run.
+    $marker = sys_get_temp_dir() . '/profile_system_housekeeping_' . substr(sha1(__DIR__), 0, 12);
     if (is_file($marker) && filemtime($marker) > time() - 6 * 3600) { return; }
     $fh = @fopen($marker, 'c');
     if (!$fh || !flock($fh, LOCK_EX | LOCK_NB)) { return; }

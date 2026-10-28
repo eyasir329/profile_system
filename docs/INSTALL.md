@@ -27,14 +27,14 @@ tour of the files, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## 1. What you need
 
-| | Minimum | Notes |
-| --- | --- | --- |
-| Operating system | Windows 10 22H2 or 11 (64-bit), macOS 13+, any current 64-bit Linux | Intel/AMD or ARM (Apple Silicon, Raspberry Pi 4/5 with 64-bit OS). Every image used is published for both. |
-| Memory | 4 GB RAM (8 GB comfortable) | The app itself uses about 300 MB; the rest is Docker and the OS. |
-| Disk | About 3 GB free | Images ≈ 1 GB, plus the database and backups. |
-| Network | Internet for the first start | Images are downloaded once. After that it runs offline. |
-| Ports | 8080 free | Change `WEB_PORT` in `.env` if something else uses it. |
-| Programs | **Docker** (with Compose v2), **Git**, and optionally **make** | Installed in step 2. |
+|                  | Minimum                                                                          | Notes                                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Operating system | Windows 10 22H2 or 11 (64-bit), macOS 13+, any current 64-bit Linux              | Intel/AMD or ARM (Apple Silicon, Raspberry Pi 4/5 with 64-bit OS). Every image used is published for both. |
+| Memory           | 4 GB RAM (8 GB comfortable)                                                      | The app itself uses about 300 MB; the rest is Docker and the OS.                                           |
+| Disk             | About 3 GB free                                                                  | Images ≈ 1 GB, plus the database and backups.                                                             |
+| Network          | Internet for the first start                                                     | Images are downloaded once. After that it runs offline.                                                    |
+| Ports            | 8080 free                                                                        | Change `WEB_PORT` in `.env` if something else uses it.                                                 |
+| Programs         | **Docker** (with Compose v2), **Git**, and optionally **make** | Installed in step 2.                                                                                       |
 
 What each program is for:
 
@@ -68,7 +68,7 @@ and inside it `make`, `bash` and file paths all behave as on Linux.
    Restart when asked. Ubuntu opens and asks for a Linux user name and
    password (these are new, not your Windows login).
 3. **Install Docker Desktop** from
-   <https://www.docker.com/products/docker-desktop/>. During setup keep
+   [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/). During setup keep
    *Use WSL 2 instead of Hyper-V* ticked. After it starts, open
    Settings → Resources → WSL integration and switch **Ubuntu** on.
 4. **Install Git and make inside Ubuntu.** Open the *Ubuntu* app from
@@ -100,9 +100,8 @@ line endings.
    ```bash
    xcode-select --install
    ```
-
 2. **Install Docker Desktop** from
-   <https://www.docker.com/products/docker-desktop/>: pick *Apple
+   [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/): pick *Apple
    Silicon* or *Intel* to match your Mac ( → About This Mac). Open it
    once so it finishes setup. (OrbStack or Colima work too; any of them
    provides the `docker` and `docker compose` commands.)
@@ -129,9 +128,9 @@ docker compose version                               # must print v2.x
 ```
 
 Fedora: `sudo dnf install -y git make` and follow
-<https://docs.docker.com/engine/install/fedora/>. Arch:
+[https://docs.docker.com/engine/install/fedora/](https://docs.docker.com/engine/install/fedora/). Arch:
 `sudo pacman -S git make docker docker-compose && sudo systemctl enable --now docker`.
-For other distributions see <https://docs.docker.com/engine/install/>.
+For other distributions see [https://docs.docker.com/engine/install/](https://docs.docker.com/engine/install/).
 
 ## 3. Get the project
 
@@ -173,13 +172,13 @@ change it (see [TUNNEL.md → Rotate the DB password](TUNNEL.md#rotate-the-db-pa
 Everything else can stay as it is for running on your own computer. The
 settings you might change:
 
-| Setting | Default | Change when |
-| --- | --- | --- |
-| `WEB_PORT` | `8080` | Port 8080 is taken. The app is then at `http://localhost:<port>`. |
-| `APP_DB_USER`, `DB_APP_PASSWORD` | unset (app uses root) | Anything beyond your own computer: the app then connects as a user that can only read and write rows. |
-| `APP_TIMEZONE` | `UTC` | Until an admin picks a zone in Admin › Site settings. |
-| `MAIL_*` | email off | You want emails. For testing, use Mailpit (step 8). |
-| `APP_ENV`, `APP_URL`, `COOKIE_SECURE`, `TRUST_PROXY`, `WEB_BIND` | development values | Before other people reach it over a network. See step 11. |
+| Setting                                                                    | Default               | Change when                                                                                           |
+| -------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `WEB_PORT`                                                               | `8080`              | Port 8080 is taken. The app is then at `http://localhost:<port>`.                                   |
+| `APP_DB_USER`, `DB_APP_PASSWORD`                                       | unset (app uses root) | Anything beyond your own computer: the app then connects as a user that can only read and write rows. |
+| `APP_TIMEZONE`                                                           | `UTC`               | Until an admin picks a zone in Admin › Site settings.                                                |
+| `MAIL_*`                                                                 | email off             | You want emails. For testing, use Mailpit (step 8).                                                   |
+| `APP_ENV`, `APP_URL`, `COOKIE_SECURE`, `TRUST_PROXY`, `WEB_BIND` | development values    | Before other people reach it over a network. See step 11.                                             |
 
 Leave `DB_NAME=profile_system` and `DB_HOST=profile_db` as they are:
 `database/schema.sql` creates the database under that name, and
@@ -207,13 +206,13 @@ What happens, in order (all automatic):
 Watch it with `make logs` (Ctrl+C stops watching, not the app). The line
 `[entrypoint] Database ready. Starting Apache...` means it is ready.
 
-Then open **<http://localhost:8080>**.
+Then open **[http://localhost:8080](http://localhost:8080)**.
 
 ## 6. Create the first account
 
 While the database has no users, `/register.php` lets the first person
 sign up without an invitation, and that account becomes the **admin**.
-Open <http://localhost:8080/register.php>, create it, and sign in.
+Open [http://localhost:8080/register.php](http://localhost:8080/register.php), create it, and sign in.
 
 Everyone after that needs an invitation link: as admin (or teacher, for
 students) open **Invitations**, create a link and send it. To try the
@@ -268,7 +267,7 @@ MAIL_ENCRYPTION=none
 MAIL_FROM_ADDRESS=noreply@example.test
 ```
 
-Every email the app sends now appears at <http://localhost:8025> and
+Every email the app sends now appears at [http://localhost:8025](http://localhost:8025) and
 none reach real people.
 
 **Changing the CSS or JavaScript** (`resources/`): `make assets` rebuilds
@@ -280,19 +279,19 @@ Node installed. See [`FRONTEND.md`](FRONTEND.md).
 `make` only calls `docker compose`. These work in any terminal,
 including PowerShell, from the project folder:
 
-| Instead of | Run |
-| --- | --- |
-| `make up` | `docker compose up -d --build` |
-| `make down` | `docker compose down` |
-| `make logs` | `docker compose logs -f --tail=100` |
-| `make restart` | `docker compose restart web` |
-| `make ps` | `docker compose ps` |
-| `make lint` | `docker compose exec web bash -c 'find public src -name "*.php" -print0 \| xargs -0 -n1 php -l \| grep -v "No syntax errors"'` |
-| `make db-shell` | `docker compose exec db mariadb -uroot -p profile_system` (asks for `DB_PASSWORD`) |
-| `make purge` | `docker compose exec web php /var/www/src/cli/housekeeping.php` |
-| `make mail` | `docker compose --profile tools up -d mailpit` |
-| `make tools` | `docker compose --profile tools up -d adminer` |
-| `make backup` (database part) | `docker compose exec -T db mariadb-dump -uroot -p<password> --single-transaction profile_system > db.sql` |
+| Instead of                      | Run                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `make up`                     | `docker compose up -d --build`                                                                                               |
+| `make down`                   | `docker compose down`                                                                                                        |
+| `make logs`                   | `docker compose logs -f --tail=100`                                                                                          |
+| `make restart`                | `docker compose restart web`                                                                                                 |
+| `make ps`                     | `docker compose ps`                                                                                                          |
+| `make lint`                   | `docker compose exec web bash -c 'find public src -name "*.php" -print0 \| xargs -0 -n1 php -l \| grep -v "No syntax errors"'` |
+| `make db-shell`               | `docker compose exec db mariadb -uroot -p profile_system` (asks for `DB_PASSWORD`)                                         |
+| `make purge`                  | `docker compose exec web php /var/www/src/cli/housekeeping.php`                                                              |
+| `make mail`                   | `docker compose --profile tools up -d mailpit`                                                                               |
+| `make tools`                  | `docker compose --profile tools up -d adminer`                                                                               |
+| `make backup` (database part) | `docker compose exec -T db mariadb-dump -uroot -p<password> --single-transaction profile_system > db.sql`                    |
 
 On Windows, `copy .env.example .env` replaces `cp`.
 
@@ -345,26 +344,27 @@ invitations arrive. Then `make up`.
 - For production you can also remove the three source bind mounts under
   `web: volumes:` in `compose.yml`, so the container runs only the code
   baked into the image.
+- **Shared PHP hosting** (InfinityFree, no Docker): see [`DEPLOYMENT.md`](DEPLOYMENT.md). The live site runs this way.
 - The operator checklist is in [`SECURITY.md`](SECURITY.md#5-checklist-for-whoever-runs-it).
 
 ## 12. Troubleshooting
 
-| Problem | Cause and fix |
-| --- | --- |
-| `docker: command not found`, or `make` says Docker is missing | Docker isn't installed or its app isn't running. Start Docker Desktop and wait until it says *running*. On WSL, check Settings → Resources → WSL integration. |
-| `permission denied … /var/run/docker.sock` (Linux) | Your user isn't in the `docker` group: `sudo usermod -aG docker $USER`, then log out and in. |
-| `'docker compose' plugin is missing` | You have the old `docker-compose` v1. Install the plugin: `sudo apt install docker-compose-plugin`, or update Docker Desktop. |
-| `Bind for 0.0.0.0:8080 failed: port is already allocated` | Something else uses 8080. Set `WEB_PORT=9000` in `.env` and `make up`; the app is then at `http://localhost:9000`. |
+| Problem                                                                                              | Cause and fix                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker: command not found`, or `make` says Docker is missing                                    | Docker isn't installed or its app isn't running. Start Docker Desktop and wait until it says *running*. On WSL, check Settings → Resources → WSL integration.                                                                                                         |
+| `permission denied … /var/run/docker.sock` (Linux)                                                | Your user isn't in the `docker` group: `sudo usermod -aG docker $USER`, then log out and in.                                                                                                                                                                          |
+| `'docker compose' plugin is missing`                                                               | You have the old `docker-compose` v1. Install the plugin: `sudo apt install docker-compose-plugin`, or update Docker Desktop.                                                                                                                                         |
+| `Bind for 0.0.0.0:8080 failed: port is already allocated`                                          | Something else uses 8080. Set `WEB_PORT=9000` in `.env` and `make up`; the app is then at `http://localhost:9000`.                                                                                                                                                |
 | Web container restarts with `/usr/bin/env: 'bash\r'` or `exec format error … web-entrypoint.sh` | The script got Windows line endings (copied through a Windows folder or a ZIP edited on Windows). Run `git add --renormalize . && git checkout -- docker/web-entrypoint.sh`, or in WSL `sed -i 's/\r$//' docker/web-entrypoint.sh`, then `make rebuild && make up`. |
-| `[entrypoint] FATAL: database did not become reachable` / `Access denied for user 'root'` | The database volume was created with a different `DB_PASSWORD` than the one now in `.env`. Put the old password back, or, **if there is no data you need**, `make reset` and start again. |
-| Page says *temporarily unavailable* (503) | The app can't reach the database. `make ps` and `make logs`; usually the db container is still starting or the password is wrong (above). |
-| Blank page or error page after editing PHP | Errors are logged, not shown: `make logs`. |
-| A new migration didn't run | Migrations run when the web container starts: `make restart`, then look for `Applying migration:` in the log. |
-| Changes to `docker/apache/app.conf` or `docker/php/app.ini` have no effect | They are baked into the image: `make rebuild && make up`. |
-| CSS changes in `resources/` don't show | The browser loads the built file: `make assets`, then reload with Ctrl+F5. |
-| Very slow pages on Windows | The project is under `/mnt/c/…` or opened from PowerShell. Clone it inside the WSL home folder (`~/profile_system`). |
-| `make backup` fails on Windows outside WSL | Its paths need a Linux shell. Use WSL, or the plain `mariadb-dump` command in step 9. |
-| Docker Desktop on macOS/Windows uses a lot of memory | Settings → Resources: 2 GB is enough for this app. |
+| `[entrypoint] FATAL: database did not become reachable` / `Access denied for user 'root'`        | The database volume was created with a different `DB_PASSWORD` than the one now in `.env`. Put the old password back, or, **if there is no data you need**, `make reset` and start again.                                                                     |
+| Page says *temporarily unavailable* (503)                                                          | The app can't reach the database. `make ps` and `make logs`; usually the db container is still starting or the password is wrong (above).                                                                                                                             |
+| Blank page or error page after editing PHP                                                           | Errors are logged, not shown: `make logs`.                                                                                                                                                                                                                              |
+| A new migration didn't run                                                                           | Migrations run when the web container starts: `make restart`, then look for `Applying migration:` in the log.                                                                                                                                                         |
+| Changes to `docker/apache/app.conf` or `docker/php/app.ini` have no effect                       | They are baked into the image: `make rebuild && make up`.                                                                                                                                                                                                               |
+| CSS changes in `resources/` don't show                                                             | The browser loads the built file: `make assets`, then reload with Ctrl+F5.                                                                                                                                                                                              |
+| Very slow pages on Windows                                                                           | The project is under `/mnt/c/…` or opened from PowerShell. Clone it inside the WSL home folder (`~/profile_system`).                                                                                                                                                 |
+| `make backup` fails on Windows outside WSL                                                         | Its paths need a Linux shell. Use WSL, or the plain `mariadb-dump` command in step 9.                                                                                                                                                                                   |
+| Docker Desktop on macOS/Windows uses a lot of memory                                                 | Settings → Resources: 2 GB is enough for this app.                                                                                                                                                                                                                       |
 
 ## 13. Removing it
 
