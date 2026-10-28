@@ -36,7 +36,9 @@ function validate_email(string $email): array
 function validate_password(string $password, bool $required = true): array
 {
     $errors = [];
-    $len = strlen($password);
+    // Characters, not bytes: a Japanese character is 3 bytes in UTF-8, so
+    // strlen() would let a 3-character password pass the 8-character rule.
+    $len = mb_strlen($password, 'UTF-8');
     if ($required && $len === 0) {
         $errors['password'] = 'Please enter a password.';
     } elseif ($required && $len < 8) {
@@ -44,10 +46,21 @@ function validate_password(string $password, bool $required = true): array
         // Login (required: false) only needs a non-empty value because
         // we authenticate against the stored hash regardless of length.
         $errors['password'] = 'Password must be at least 8 characters.';
-    } elseif ($len > 4096) {
+    } elseif (strlen($password) > 4096) {
         $errors['password'] = 'Password is too long.';
     }
     return ['value' => $password, 'errors' => $errors];
+}
+
+/**
+ * First word of a name for greetings ("Hi Haruka"). Splits on any
+ * whitespace, including the full-width space (U+3000) Japanese names use:
+ * "佐藤　遥" -> "佐藤".
+ */
+function first_name(string $name): string
+{
+    $parts = preg_split('/[\s\x{3000}]+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY);
+    return $parts ? (string)$parts[0] : '';
 }
 
 function validate_password_confirm(string $password, string $confirm): array

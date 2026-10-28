@@ -44,3 +44,8 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- Shared-hosting credentials (see deploy/infinityfree/) ----
+/hosting_config.php
+*.sql.bak
+/build/

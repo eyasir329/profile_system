@@ -39,7 +39,7 @@ require_once __DIR__ . '/db.php';
  */
 function client_ip(): string
 {
-    $trustProxy = getenv('TRUST_PROXY') === '1';
+    $trustProxy = app_env('TRUST_PROXY') === '1';
     if ($trustProxy) {
         // Behind Cloudflare: CF-Connecting-IP is set by Cloudflare itself.
         $cf = trim((string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));

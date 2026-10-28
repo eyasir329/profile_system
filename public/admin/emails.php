@@ -484,7 +484,7 @@ require __DIR__ . '/../../src/includes/header.php';
           <button class="btn btn-primary" type="submit"<?= mail_type_enabled('custom') ? '' : ' disabled title="Custom emails are switched off"' ?>><?= pf_icon('swap') ?> Send again</button>
         </form>
       <?php elseif ($d['to_user_id'] && empty($d['user_deleted'])): ?>
-        <a class="btn btn-secondary" href="<?= e($self . '?view=compose&user=' . (int)$d['to_user_id']) ?>"><?= pf_icon('mail') ?> Write to <?= e(explode(' ', (string)$d['user_name'])[0]) ?></a>
+        <a class="btn btn-secondary" href="<?= e($self . '?view=compose&user=' . (int)$d['to_user_id']) ?>"><?= pf_icon('mail') ?> Write to <?= e(first_name((string)$d['user_name'])) ?></a>
       <?php endif; ?>
     </div>
   </header>
@@ -831,10 +831,10 @@ require __DIR__ . '/../../src/includes/header.php';
               <span class="text-muted-foreground-2">Read from <code>.env</code></span>
             </p>
             <dl class="server-facts">
-              <dt>Server</dt><dd><?= e((string)getenv('MAIL_HOST') ?: '–') ?><?= getenv('MAIL_HOST') ? ':' . e((string)(getenv('MAIL_PORT') ?: '587')) : '' ?></dd>
-              <dt>Security</dt><dd><?= e(strtoupper((string)(getenv('MAIL_ENCRYPTION') ?: 'tls'))) ?></dd>
-              <dt>From</dt><dd><?= e((string)getenv('MAIL_FROM_ADDRESS') ?: '–') ?></dd>
-              <dt>Sender name</dt><dd><?= e((string)(getenv('MAIL_FROM_NAME') ?: 'Profile System')) ?></dd>
+              <dt>Server</dt><dd><?= e((string)mail_config_value('MAIL_HOST') ?: '–') ?><?= mail_config_value('MAIL_HOST') ? ':' . e((string)(mail_config_value('MAIL_PORT') ?: '587')) : '' ?></dd>
+              <dt>Security</dt><dd><?= e(strtoupper((string)(mail_config_value('MAIL_ENCRYPTION') ?: 'tls'))) ?></dd>
+              <dt>From</dt><dd><?= e((string)mail_config_value('MAIL_FROM_ADDRESS') ?: '–') ?></dd>
+              <dt>Sender name</dt><dd><?= e((string)(mail_config_value('MAIL_FROM_NAME') ?: 'Profile System')) ?></dd>
               <dt>Links use</dt><dd><?= e(mail_app_url() ?: 'APP_URL not set') ?></dd>
             </dl>
             <p class="hint mt-3">To change these, edit <code>.env</code> and restart the app. The password is never shown.</p>

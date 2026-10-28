@@ -54,6 +54,9 @@ if (isset($_GET['expired']) && $_GET['expired'] === '1') {
 if (isset($_GET['deactivated']) && $_GET['deactivated'] === '1') {
     $flash[] = ['type' => 'warn', 'title' => 'Account deactivated', 'body' => 'Your account is currently deactivated. Use the link in your deactivation email to reactivate it, or contact support.'];
 }
+if (isset($_GET['error']) && $_GET['error'] === '1') {
+    $flash[] = ['type' => 'error', 'title' => 'Sign-in failed', 'body' => 'Something went wrong while signing you in. Please try again.'];
+}
 if (isset($_GET['restored']) && $_GET['restored'] === '1') {
     $flash[] = ['type' => 'success', 'title' => 'Account restored', 'body' => 'Your account is active again. You can now log in.'];
 }
@@ -83,8 +86,14 @@ function finalize_login(int $userId, string $name, array $roles, string $chosenR
         $t = $pdo->prepare('SELECT totp_required FROM users WHERE id = :u');
         $t->execute(['u' => $userId]);
         $totpRow = $t->fetch();
-    } catch (Throwable $e) { $totpRow = null; }
-    if ($totpRow && (int)$totpRow['totp_required'] === 1) {
+    } catch (Throwable $e) {
+        // Fail closed: if we can't tell whether two-factor is on, don't
+        // sign in on the password alone.
+        error_log('login.totp_check: ' . $e->getMessage());
+        end_session('/login.php?error=1');
+    }
+    if (!$totpRow) { end_session('/login.php?error=1'); }
+    if ((int)$totpRow['totp_required'] === 1) {
         // Not signed in yet: the "login" event is logged once the code is right
         // (complete_totp_login()); this records that the password was.
         log_activity($userId, 'login_password_ok', $chosenRole);

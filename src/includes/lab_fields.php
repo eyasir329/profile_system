@@ -68,12 +68,13 @@ function lab_field_defs(): array
         'enrolled_month'      => $f('Enrolled month', true, 'select', 10, 0, '', 'The month you started your current course.', false, LAB_ENROL_MONTHS),
         'next_step'           => $f('Next step (進路)', true, 'text', 255, 0, 'e.g. Master course, job hunting, undecided', 'What you plan to do after this course.'),
         'previous_univ_level' => $f('Previous univ / level', true, 'text', 255, 0, 'e.g. Example University / Bachelor'),
-        // These three are generated from the person's entries (lab_entries,
-        // edited on /profile.php): "[Level: Title]" per thesis, and
-        // "{published}(submitted)" plus one line per paper.
+        // Generated from the person's thesis entries (lab_entries, edited on
+        // /profile.php): "[Level: Title]" per thesis.
         'completed_thesis'    => $f('Completed thesis titles', true, 'textarea', 5000),
-        'journal_papers'      => $f('Journal papers', true, 'textarea', 5000),
-        'conference_papers'   => $f('Conference papers', true, 'textarea', 5000),
+        // Two numbers each, edited on /profile.php as "published" and
+        // "submitted" boxes and stored as "3(1)" (see paper_format()).
+        'journal_papers'      => $f('Journal papers', true, 'text', 20, 0, '', 'Published(submitted), e.g. 3(1).'),
+        'conference_papers'   => $f('Conference papers', true, 'text', 20, 0, '', 'Published(submitted), e.g. 2(0).'),
     ];
 }
 
@@ -274,4 +275,3 @@ function enrollment_remove(PDO $pdo, int $userId, int $id): bool
     }
     return false;
 }
-

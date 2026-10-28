@@ -14,12 +14,12 @@ committed, so running it needs no Node toolchain.
 
 | Role | Can |
 | --- | --- |
-| **Student** | Fill in and edit their own lab details in place (course, student ID, names, email, research title, enrolment year and month, next step, previous university). Add completed theses, journal and conference papers, and publications and awards as separate entries. Mark their current course completed, then add the next one (one course at a time). Read the lab's resources, and add, edit and delete potential journals (a shared list). |
+| **Student** | Fill in and edit their own lab details in place (course, student ID, names, email, research title, enrolment year and month, next step, previous university). Add completed theses, publications and awards as separate entries, and enter how many journal and conference papers they have published and submitted (two numbers each, shown as `3(1)`). Read the Students sheet (the same sheet teachers see). Mark their current course completed, then add the next one (one course at a time). Read the lab's resources, and add, edit and delete potential journals (a shared list). |
 | **Teacher** | Read every active student's details in one searchable sheet laid out like the workbook, with a Current students tab and a Completed tab (one fixed row per completed course). Open one student. Keep the lab's Templates and Open data and code; add, edit and delete potential journals like everyone; read everyone's publications and awards. Invite new students by link. |
 | **Admin** | Create, edit, deactivate, restore and delete accounts; assign roles; edit every lab field; invite people with any role. Account management only: no Students sheet and no Resources (an admin who also teaches switches to Teacher). |
 
-Each role sees only what it works with: students get their profile and
-Resources, teachers get the Students sheet, Resources and invitations,
+Each role sees only what it works with: students get their profile, the
+Students sheet (read-only) and Resources, teachers get the Students sheet, Resources and invitations,
 admins get Users and invitations. Lab details belong to
 students; teacher and admin accounts have none. What a user may do
 follows the role they are **acting as**.
@@ -52,13 +52,13 @@ as the day the invitation was created (or the course was added) and the
 student can change them (year 2022 to next year; month April, October or
 Other).
 
-Completed theses, journal papers and conference papers, and the four
-publications and awards sheets, hold several items each. They are
+Completed theses and the four publications and awards sheets hold
+several items each. They are
 **entries** defined in `src/includes/lab_entries.php`: the student adds,
-edits and deletes them one by one on My profile. The three main-sheet
-columns are rebuilt from the entries in the workbook's format
-(`[Level: Title]`, `{published}(submitted)`) so the Students sheet reads
-them. Cells with several items show a numbered list.
+edits and deletes them one by one on My profile. The thesis column
+is rebuilt from the entries in the workbook's format (`[Level: Title]`).
+Journal and conference papers are not entries: each is two numbers,
+published and submitted, saved together as `3(1)`. Cells with several items show a numbered list.
 
 ### Courses
 
@@ -113,7 +113,7 @@ internet: it covers the settings in `.env` that must change first.
 | `/profile.php` | student | Own lab details, entries (theses, papers, publications, awards) and courses, edited in place. Others see only their name, email and roles |
 | `/resources.php` | signed in | Lab resources, one tab per sheet; `?tab=` followed by `templates`, `data`, `journals`, `pub_journals`, `pub_proceedings`, `pub_presentations` or `awards`. Students and teachers only (admins get a 403 page). Teachers edit Templates and Open data and code; everyone edits Potential journals |
 | `/settings.php` | signed in | Name, email, theme, password, 2FA, deactivate |
-| `/students.php` | teacher | The Students sheet: Current students and Completed tabs (`?group=completed`), filter by course (`?course=D3`, `?course=none`), search, full screen, and **Download CSV** of what is shown (`?export=csv`, the workbook's headers, opens in Excel). Course, Student ID and both names stay frozen at the left while scrolling sideways. `?id=` for one student |
+| `/students.php` | teacher, student | The Students sheet: Current students and Completed tabs (`?group=completed`), filter by course (`?course=D3`, `?course=none`), search, full screen, and **Download CSV** of what is shown (`?export=csv`, the workbook's headers, opens in Excel). Course, Student ID and both names stay frozen at the left while scrolling sideways. `?id=` for one student |
 | `/admin/index.php` | admin | Users: every account with roles, status and joined date, filter by role and status; one user (`?id=`) |
 | `/admin/user.php` | admin | Create or edit a user |
 | `/invites.php` | teacher, admin | Create and cancel invitation links |

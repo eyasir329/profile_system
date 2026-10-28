@@ -21,7 +21,7 @@ role they are **acting as** (the role switcher in the top bar).
 | Another user's name, password | – | Read name (students only) | Create, read, update |
 | Roles | Read own | – | Read, update (cannot remove own admin role or the last admin's) |
 | Lab details: course, student ID, names (EN/JP), **university email**, research title, next step, previous university | Read, update (own). Course, student ID and email cannot be left empty; the rest can be cleared | Read (students only) | Read, update |
-| Lab details: **completed theses, journal papers, conference papers** (entries: level + title, or title + published/submitted) | Add, edit, delete (own), up to 50 per section | Read (students only), as the workbook text: `[Level: Title]` lines, or `{published}(submitted)` plus the titles | Read (generated text, read-only on `/admin/user.php`) |
+| Lab details: **completed theses** (entries: level + title) and **journal / conference paper counts** (two numbers, published and submitted, stored as `3(1)`) | Add, edit, delete (own), up to 50 per section | Read (students only), as the workbook text: `[Level: Title]` lines, or `{published}(submitted)` plus the titles | Read (generated text, read-only on `/admin/user.php`) |
 | **Publications and awards** (the second workbook's sheets: PublishedJournals, Conf.Proceedings, Conf.PresentationOnly, Awards) | Add, edit, delete (own) on My profile, up to 50 per sheet. Read everyone's on `/resources.php` (one tab per sheet) | Read everyone's on `/resources.php`, and on each student's page | – |
 | **Lab resources** (`/resources.php`: Templates, Open data and code), shared by the whole lab | Read only (copy templates, open links) | Read, add, edit, delete | – |
 | **Potential journals** (`/resources.php`, tab Potential journals): Journal name, Link, IF, CS, APC, Suggested by, Submitted by, Published. One shared list | Read, add, edit, delete (any journal) | Read, add, edit, delete | – |
@@ -58,7 +58,7 @@ holds the teacher role switches to Teacher for them.
 | Lab details exist for students only | `active_user_role() === 'student'` in `public/profile.php` (edited only while acting as a student); `$holdsStudent` in `src/includes/directory.php`; the navigation in `src/includes/header.php` |
 | Signed in, account not deactivated | `require_login()` in `src/includes/auth.php` |
 | Acting as admin | `require_admin()`; used by `public/admin/*.php` |
-| Acting as teacher for the Students sheet (admins have no sheet: the users scope of `directory.php` renders the account list only) | `public/students.php`; `$view` in `src/includes/directory.php` |
+| Acting as teacher or student for the Students sheet (read-only for both; same view) (admins have no sheet: the users scope of `directory.php` renders the account list only) | `public/students.php`; `$view` in `src/includes/directory.php` |
 | Teachers see active students only | `$scopeWhere` in `src/includes/directory.php` |
 | Profile edits touch the signed-in user's row only | every query in `public/profile.php` is bound to `user_id = <session user>`; the id never comes from the request |
 | Owner may write only some lab fields | `lab_field_defs()` (`owner_edit`) in `src/includes/lab_fields.php`, checked by `op_update_lab()` in `public/profile.php`. A refused attempt returns 403 and is logged as `lab_update_denied` |

@@ -26,6 +26,9 @@
  *       op=remove_course  id=<n>          remove a past course
  *       op=complete_course  done=1|0      mark the current course
  *                         completed (today), or undo it
+ *       op=update_papers  field=journal_papers|conference_papers
+ *                         published=<n> submitted=<n>   save the paper
+ *                         counts; stored as "published(submitted)", e.g. 3(1)
  *       op=add_entry      section=<key> <fields>   add an entry to a
  *                         repeating section (src/includes/lab_entries.php)
  *       op=update_entry   section=<key> id=<n> <fields>   change one
@@ -67,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         match ((string)($_POST['op'] ?? '')) {
             'update_lab'    => op_update_lab($pdo, $userId),
+            'update_papers' => op_update_papers($pdo, $userId),
             'add_course'    => op_add_course($pdo, $userId),
             'remove_course' => op_remove_course($pdo, $userId),
             'complete_course' => op_complete_course($pdo, $userId),
@@ -139,11 +143,16 @@ $GROUPS = [
                        'fields' => ['course', 'enrolled_year', 'enrolled_month', 'previous_univ_level', 'next_step']],
     'research'     => ['title' => 'Research', 'desc' => 'What you are working on now.',
                        'fields' => ['research_title']],
-    // Repeating sections (lab_entry_defs()): the three main-sheet columns,
-    // then one section per sheet of the publications workbook.
+    // Repeating sections (lab_entry_defs()): the thesis column, then one
+    // section per sheet of the publications workbook.
     'completed_thesis'  => ['entries' => true, 'fields' => ['completed_thesis']],
-    'journal_papers'    => ['entries' => true, 'fields' => ['journal_papers']],
-    'conference_papers' => ['entries' => true, 'fields' => ['conference_papers']],
+    // Paper counts: two number boxes each, published and submitted.
+    'journal_papers'    => ['papers' => true, 'title' => 'Journal papers',
+                            'desc' => 'How many journal papers you have published and how many you have submitted. Teachers see them as published(submitted), e.g. 3(1).',
+                            'fields' => ['journal_papers']],
+    'conference_papers' => ['papers' => true, 'title' => 'Conference papers',
+                            'desc' => 'How many conference papers you have published and how many you have submitted. Teachers see them as published(submitted), e.g. 2(0).',
+                            'fields' => ['conference_papers']],
     // The four sheets of the publications workbook share one tabbed section.
     'publications'      => ['title' => 'Publications & awards', 'desc' => 'Your published work, talks and awards. Everyone in the lab can see them on the Resources page.',
                             'tabs' => ['pub_journals', 'pub_proceedings', 'pub_presentations', 'awards'], 'fields' => []],
@@ -153,8 +162,9 @@ foreach ($ENTRY_DEFS as $k => $d) {
     if (isset($GROUPS[$k])) { $GROUPS[$k] += ['title' => $d['title'], 'desc' => $d['desc']]; }
 }
 $entries   = entries_for($pdo, $userId);
-// Single-value fields only: theses and papers are edited as entries.
-$editable  = array_diff_key(array_filter($LAB, fn($d) => $d['owner_edit']), $ENTRY_DEFS);
+// Single-value fields only: theses are edited as entries, paper counts in
+// their own two-box form.
+$editable  = array_diff_key(array_filter($LAB, fn($d) => $d['owner_edit']), $ENTRY_DEFS, array_flip(LAB_PAPER_COLUMNS));
 $courses   = enrollments_for($pdo, $userId);
 
 // Completion checklist (same one the dashboard shows): one step per lab field.
@@ -173,7 +183,7 @@ $viewCfg = [
         'values' => array_intersect_key($labValues, $editable),
         'all'    => $labValues,
     ],
-    'groups'  => array_map(fn($g) => $g['fields'], array_diff_key($GROUPS, $ENTRY_DEFS)),
+    'groups'  => array_map(fn($g) => $g['fields'], array_diff_key($GROUPS, $ENTRY_DEFS, array_flip(LAB_PAPER_COLUMNS))),
     'entries' => array_map(fn($d) => ['singular' => $d['singular'], 'fields' => $d['fields'], 'form' => $d['form'] ?? null], $ENTRY_DEFS),
     'courses' => LAB_COURSES,
 ];
@@ -237,6 +247,9 @@ require __DIR__ . '/../src/includes/header.php';
                 $n = array_sum(array_map(fn($t) => count($entries[$t]), $g['tabs']));
                 $complete = $n > 0;
                 $countHtml = '<span class="side-nav-count" data-entry-total="' . e(implode(' ', $g['tabs'])) . '">' . $n . '</span>';
+            } elseif (!empty($g['papers'])) {
+                $complete = $labValues[$gKey] !== '';
+                $countHtml = '<span class="side-nav-count" data-paper-nav="' . e($gKey) . '">' . e(paper_display($labValues[$gKey])) . '</span>';
             } elseif (!empty($g['entries'])) {
                 $n = count($entries[$gKey]);
                 $complete = $n > 0;
@@ -303,6 +316,41 @@ require __DIR__ . '/../src/includes/header.php';
           </button>
         </div>
       <?php endforeach; ?>
+    </section>
+    <?php continue; endif;
+        if (!empty($g['papers'])):
+            $pKey = $g['fields'][0];
+            $pc   = paper_counts($labValues[$pKey]) ?? [0, 0];
+            $pSet = $labValues[$pKey] !== '';
+    ?>
+    <!-- Paper counts: published and submitted, saved together as "3(1)". -->
+    <section class="section" data-profile-section data-section="<?= e($gKey) ?>" id="sec-<?= e($gKey) ?>" aria-labelledby="h-<?= e($gKey) ?>">
+      <header class="section-head">
+        <div>
+          <h2 class="section-title" id="h-<?= e($gKey) ?>"><?= e($g['title']) ?></h2>
+          <p class="section-desc"><?= e($g['desc']) ?></p>
+        </div>
+      </header>
+      <form class="card" data-paper-form="<?= e($pKey) ?>" novalidate>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:1rem">
+          <div>
+            <label class="label" for="pp-<?= e($pKey) ?>-published">Published</label>
+            <input class="input" id="pp-<?= e($pKey) ?>-published" name="published" type="text" inputmode="numeric" maxlength="4" autocomplete="off"
+                   value="<?= $pSet ? (int)$pc[0] : '' ?>" placeholder="0" data-paper-input>
+          </div>
+          <div>
+            <label class="label" for="pp-<?= e($pKey) ?>-submitted">Submitted</label>
+            <input class="input" id="pp-<?= e($pKey) ?>-submitted" name="submitted" type="text" inputmode="numeric" maxlength="4" autocomplete="off"
+                   value="<?= $pSet ? (int)$pc[1] : '' ?>" placeholder="0" data-paper-input>
+          </div>
+        </div>
+        <p class="field-error" role="alert" data-paper-error hidden></p>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;margin-top:1rem">
+          <span class="text-sm text-muted-foreground-2">Teachers see: <strong data-paper-preview><?= e(paper_format((int)$pc[0], (int)$pc[1])) ?></strong></span>
+          <span class="text-sm text-muted-foreground-2" data-paper-status role="status" style="margin-left:auto"></span>
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
     </section>
     <?php continue; endif;
         if (!empty($g['entries'])):
@@ -401,6 +449,64 @@ require __DIR__ . '/../src/includes/header.php';
     </div>
   </div>
 </div>
+
+<script>
+// Paper counts (journal / conference): two number boxes, saved together.
+(function () {
+  var csrf = (window.PS_VIEW_MODE || {}).csrf || '';
+  document.querySelectorAll('[data-paper-form]').forEach(function (form) {
+    var field = form.getAttribute('data-paper-form');
+    var pub = form.querySelector('[name=published]'), sub = form.querySelector('[name=submitted]');
+    var preview = form.querySelector('[data-paper-preview]'), err = form.querySelector('[data-paper-error]'),
+        status = form.querySelector('[data-paper-status]'), btn = form.querySelector('button[type=submit]');
+    var count = function (el) { var v = el.value.trim(); return v === '' ? '0' : v; };
+    var refresh = function () { preview.textContent = count(pub) + '(' + count(sub) + ')'; status.textContent = ''; err.hidden = true; };
+    [pub, sub].forEach(function (el) {
+      el.addEventListener('input', function () { el.value = el.value.replace(/\D+/g, ''); refresh(); });
+    });
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      btn.disabled = true; status.textContent = 'Saving…'; err.hidden = true;
+      var body = new URLSearchParams({ op: 'update_papers', field: field, published: pub.value, submitted: sub.value, csrf_token: csrf });
+      fetch(location.pathname, { method: 'POST', body: body, credentials: 'same-origin',
+                                 headers: { 'X-CSRF-Token': csrf, 'Accept': 'application/json' } })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error. Please try again.' }; }); })
+        .then(function (d) {
+          btn.disabled = false;
+          if (!d.ok) {
+            status.textContent = '';
+            err.textContent = (d.field_errors && (d.field_errors[field] || Object.values(d.field_errors)[0])) || d.error || 'Could not save.';
+            err.hidden = false; return;
+          }
+          pub.value = d.published; sub.value = d.submitted;
+          preview.textContent = d.value; status.textContent = 'Saved.';
+          var nav = document.querySelector('[data-paper-nav="' + field + '"]');
+          if (nav) { nav.textContent = d.value; var a = nav.closest('[data-section-link]'); if (a) { a.classList.add('is-complete'); } }
+          // Completeness meter: this field now counts as filled.
+          var step = document.querySelector('[data-step="lab:' + field + '"]');
+          if (step) { step.hidden = true; }
+          if (d.total) {
+            var pct = Math.round(d.filled / d.total * 100);
+            var t = document.querySelector('[data-overall-text]'), f = document.querySelector('[data-overall-fill]'),
+                bar = document.querySelector('[data-overall-bar]'), dt = document.querySelector('[data-overall-detail]');
+            if (t) { t.textContent = pct + '%'; }
+            if (f) { f.style.width = pct + '%'; }
+            if (bar) { bar.setAttribute('aria-valuenow', String(pct)); }
+            if (dt) { dt.textContent = d.filled === d.total ? 'Every field is filled in. Nice work.' : d.filled + ' of ' + d.total + ' done.'; }
+          }
+        })
+        .catch(function () { btn.disabled = false; status.textContent = ''; err.textContent = 'Could not reach the server. Try again.'; err.hidden = false; });
+    });
+  });
+  // A "next step" button for a paper field has no editor to open: jump to its section.
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-step]'); if (!b) { return; }
+    var key = (b.getAttribute('data-step') || '').split(':')[1];
+    var sec = ['journal_papers', 'conference_papers'].indexOf(key) >= 0 ? document.getElementById('sec-' + key) : null;
+    if (sec) { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); var i = sec.querySelector('input'); if (i) { i.focus({ preventScroll: true }); } }
+  });
+})();
+</script>
 
 <?php require __DIR__ . '/../src/includes/footer.php'; ?>
 
@@ -701,6 +807,30 @@ function op_delete_entry(PDO $pdo, int $userId): void
     entries_reply($pdo, $userId, $section);
 }
 
+// -------- update_papers --------
+// Saves the journal or conference paper counts of the signed-in student:
+// two whole numbers, stored as "published(submitted)", e.g. 3(1). An empty
+// box counts as 0.
+function op_update_papers(PDO $pdo, int $userId): void
+{
+    $field = (string)($_POST['field'] ?? '');
+    if (!in_array($field, LAB_PAPER_COLUMNS, true)) { op_json_error('Unknown field.'); return; }
+    $label = lab_field_defs()[$field]['label'];
+    $pub = paper_count_input((string)($_POST['published'] ?? ''));
+    $sub = paper_count_input((string)($_POST['submitted'] ?? ''));
+    if ($pub === null || $sub === null) {
+        op_json_field_errors([$field => 'Enter whole numbers (0 or more) in both boxes.']);
+        return;
+    }
+    $value = paper_format($pub, $sub);
+    // $field is one of LAB_PAPER_COLUMNS, never raw input.
+    $pdo->prepare("UPDATE profiles SET `$field` = :v WHERE user_id = :u")->execute(['v' => $value, 'u' => $userId]);
+    log_activity($userId, 'profile_update', 'lab:' . $field);
+    $state = profile_state($pdo, $userId);
+    op_json_ok(['value' => $value, 'published' => $pub, 'submitted' => $sub, 'label' => $label,
+                'filled' => $state['filled'], 'total' => $state['total'], 'state' => $state]);
+}
+
 // -------- update_lab --------
 // Saves one lab field of the signed-in user's own profile.
 // The owner may write only the fields marked owner_edit in
@@ -718,6 +848,10 @@ function op_update_lab(PDO $pdo, int $userId): void
     $def = $defs[$field];
     if (isset(lab_entry_defs()[$field])) {
         op_json_error('Add or edit “' . $def['label'] . '” as entries.');
+        return;
+    }
+    if (in_array($field, LAB_PAPER_COLUMNS, true)) {
+        op_json_error('Set “' . $def['label'] . '” with the published and submitted boxes.');
         return;
     }
     if (!$def['owner_edit']) {

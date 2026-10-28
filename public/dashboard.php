@@ -40,7 +40,7 @@ if (!$me) {
     header('Location: ' . url_login());
     exit;
 }
-$firstName  = explode(' ', trim((string)$me['name']))[0] ?: 'there';
+$firstName  = first_name((string)$me['name']) ?: 'there';
 $activeRole = active_user_role();
 
 // ---- The main panel depends on the role being acted as. ----
@@ -139,7 +139,7 @@ if ($isStudentView) {
         $attention[] = ['info', 'user', $never . ' account' . ($never === 1 ? ' has' : 's have') . ' never signed in (older than a week)', url_admin() . '?sort=inactive', 'See'];
     }
     $tzSet = $one("SELECT COUNT(*) FROM app_settings WHERE name = 'app.timezone'");
-    if (!$tzSet && trim((string)getenv('APP_TIMEZONE')) === '') {
+    if (!$tzSet && trim(app_env('APP_TIMEZONE')) === '') {
         $attention[] = ['info', 'settings', 'Times are shown in UTC: choose your lab\'s time zone', url_admin_settings(), 'Choose'];
     }
 

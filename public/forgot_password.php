@@ -74,7 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // production, is it shown on screen instead: the banner
                 // would otherwise hand a working reset link to whoever
                 // typed the address.
-                $isDev = getenv('APP_ENV') !== 'production';
+                // Only an explicit development setting counts: an unset or
+                // unreadable APP_ENV (putenv() is disabled on shared hosts)
+                // must never put a working reset link on screen.
+                $isDev = in_array(app_env('APP_ENV'), ['development', 'local'], true);
                 $canMail = mail_type_enabled('password_reset');
                 if ($canMail) {
                     mail_password_reset($email, (string)$u['name'], $rawToken);
