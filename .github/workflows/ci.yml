@@ -64,6 +64,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Forbidden files
+        # Root hosting_config.php holds credentials. src/includes/hosting_config.php
+        # is the loader (no secrets) and is meant to be tracked.
         run: |
-          bad=$(git ls-files | grep -E '(^|/)(\.env|hosting_config\.php)$|\.(pem|key)$|\.sql\.gz$' || true)
+          bad=$(git ls-files | grep -E '(^|/)\.env$|^hosting_config\.php$|\.(pem|key)$|\.sql\.gz$' || true)
           test -z "$bad" || { echo "Tracked secret-like files:"; echo "$bad"; exit 1; }
