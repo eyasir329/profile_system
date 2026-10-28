@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, gd, zip
+          tools: composer:v2
+      - name: Validate composer.json and lock file
+        run: composer validate --no-check-publish
+      - name: Lint every PHP file
+        run: find public src deploy tests docker -name '*.php' -not -path 'src/vendor/*' -print0 | xargs -0 -n1 php -l | { grep -v 'No syntax errors' || true; } | tee /tmp/lint.txt; test ! -s /tmp/lint.txt
+      - name: Unit tests
+        run: php tests/run.php
+
+  assets:
+    name: Front-end build is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Built files in public/assets must match the committed ones
+        run: git diff --exit-code -- public/assets
+
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: for f in docker/web-entrypoint.sh deploy/infinityfree/build.sh; do bash -n "$f"; done
+      - name: Deploy build assembles the shared-hosting tree
+        run: |
+          deploy/infinityfree/build.sh "$RUNNER_TEMP/htdocs"
+          test -f "$RUNNER_TEMP/htdocs/index.php"
+          test -f "$RUNNER_TEMP/htdocs/src/includes/db.php"
+          test ! -e "$RUNNER_TEMP/htdocs/hosting_config.php"
+
+  secrets:
+    name: No secrets committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbidden files
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)(\.env|hosting_config\.php)$|\.(pem|key)$|\.sql\.gz$' || true)
+          test -z "$bad" || { echo "Tracked secret-like files:"; echo "$bad"; exit 1; }

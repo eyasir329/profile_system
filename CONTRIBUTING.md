@@ -100,7 +100,9 @@ the codebase coherent.
 
 ## Testing
 
-There is no automated test suite yet. Manual smoke tests for a typical change:
+`make test` runs the unit tests in `tests/` (pure helpers: validators, paper counts, names, TOTP; no database needed). CI runs them, `make lint`, and a check that the built CSS/JS match `resources/` on every pull request. Add a case in `tests/run.php` when you change a pure helper.
+
+There are no automated browser or database tests yet, so for pages and queries do these manual smoke tests:
 
 ```bash
 # 1. Restart the web container so migrations apply.
@@ -130,7 +132,7 @@ Then click through in the browser for any page that renders dynamic content
 - [ ] `docker compose logs web` shows the schema + migrations apply cleanly
 - [ ] All pages above return 200 (or 302 redirect to login)
 - [ ] No new errors in `docker compose logs web`
-- [ ] `make lint` prints nothing
+- [ ] `make lint` prints nothing and `make test` passes
 - [ ] If you changed `resources/`, `make assets` ran and `public/assets/` is
       committed
 - [ ] `.env` is **not** committed; `.env.example` **is** updated if any new

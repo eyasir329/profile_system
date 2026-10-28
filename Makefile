@@ -116,6 +116,11 @@ lint: require-docker ## Run `php -l` over every .php file (no host PHP needed).
 	@docker compose exec -T web bash -c 'set -e; \
 		find public src -name "*.php" -print0 | xargs -0 -n1 php -l | (grep -v "No syntax errors" || true)'
 
+.PHONY: test
+test: ## Run the unit tests for the pure helpers (throwaway PHP container; no stack needed).
+	$(call banner,Running tests)
+	@docker run --rm -v "$(CURDIR)":/app -w /app php:8.3-cli php tests/run.php
+
 # ---- front-end assets ------------------------------------------------------
 # Tailwind CSS + Alpine.js are compiled from resources/ into public/assets/.
 # The built files are committed, so you only need these targets after

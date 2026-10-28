@@ -42,9 +42,9 @@ do what), [`SECURITY.md`](SECURITY.md), [`FRONTEND.md`](FRONTEND.md),
 ```
 profile_system/
 ├── README.md              What the app does, quick start, pages, tables
-├── README.txt             Five-line plain-text pointer to README.md
 ├── CHANGELOG.md           What changed, newest first, with the reasons
 ├── CONTRIBUTING.md        Conventions for changing the code
+├── SECURITY.md            How to report a vulnerability (design: docs/SECURITY.md)
 ├── LICENSE
 │
 ├── Dockerfile             Builds the web image (PHP 8.3 + Apache + extensions)
@@ -54,9 +54,13 @@ profile_system/
 ├── .dockerignore          Keeps secrets, backups, Node files out of the image
 ├── .gitignore             Keeps .env, backups, uploads, logs out of Git
 ├── .gitattributes         Forces Linux line endings on scripts and SQL
+├── .editorconfig          Charset, indentation and line-ending rules for every editor
+├── .github/               CI workflow, Dependabot, PR and issue templates, CODEOWNERS
 │
 ├── public/                Apache's document root: everything a browser can request
 ├── src/                   PHP that is NOT web-reachable: shared code, CLI, vendor
+├── tests/                 Dependency-free unit tests (`make test`)
+├── deploy/                Shared-hosting build and config (docs/DEPLOYMENT.md)
 ├── database/              schema.sql + numbered migrations
 ├── docker/                Container config: entrypoint, Apache, PHP, DB bootstrap
 ├── resources/             CSS and JS **source** (Tailwind, Alpine), built into public/assets

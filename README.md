@@ -135,8 +135,11 @@ src/includes/        shared PHP
 resources/           CSS and JS source (Tailwind v4, Alpine.js)
 database/            schema.sql + migrations/ (applied in name order on start)
 docker/              container entrypoint and DB bootstrap
+deploy/infinityfree/ shared-hosting build script, Apache rules, installer SQL
+tests/               unit tests for the pure helpers (make test)
+.github/             CI, Dependabot, PR/issue templates
 docs/                INSTALL, ARCHITECTURE, DECISIONS, DESIGN, COMPONENTS,
-                     FRONTEND, PERMISSIONS, SECURITY, TUNNEL
+                     FRONTEND, PERMISSIONS, SECURITY, TUNNEL, DEPLOYMENT (index: docs/README.md)
 tools/               responsive-audit.js (Playwright; not part of the app)
 ```
 
@@ -184,7 +187,9 @@ completion and its saved copy; `028` to `031` potential journals (`030` gives th
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Stack decisions, design tokens, layout and behaviour rules |
 | [`docs/COMPONENTS.md`](docs/COMPONENTS.md) | Every component class and PHP helper, with markup |
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Build commands, file layout, Alpine stores and components |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | The live site on shared hosting: building the upload folder, first deploy, updates, settings, Japanese text, checklist |
 | [`docs/TUNNEL.md`](docs/TUNNEL.md) | Exposing the app through a Cloudflare tunnel safely |
+| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed |
 
 ## Security notes
