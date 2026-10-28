@@ -39,7 +39,19 @@ The project now matches the code running in production on InfinityFree.
   fetch gets a redirect instead of a 401.
 - **Reliability**: the database connection times out after 3 s and does
   not retry; the housekeeping marker is per install.
-- **Docs**: README, INSTALL, PERMISSIONS and ARCHITECTURE updated.
+- **Docs**: README, INSTALL, PERMISSIONS and ARCHITECTURE updated; new
+  `docs/README.md` index and root `SECURITY.md` (reporting policy).
+
+### Repository structure
+
+- **CI** (`.github/workflows/ci.yml`): `composer validate`, PHP lint, unit
+  tests, front-end build must equal the committed assets, shell syntax and
+  a dry run of the shared-hosting build, and a guard against committed
+  secrets. Dependabot (npm, Composer, Docker, Actions), `CODEOWNERS`, PR
+  and issue templates.
+- **Tests**: `tests/run.php` and `make test` (26 checks: password length in
+  characters, `first_name()`, paper counts, TOTP secrets).
+- `.editorconfig`; removed the redundant `README.txt`.
 
 ### Documentation: install from nothing, architecture, decisions
 
