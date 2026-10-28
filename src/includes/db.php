@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Load hosting-panel settings when running on shared hosting.
-require_once __DIR__ . '/hosting_config.php';
+require_once __DIR__ . '/app_env.php';
 
 /**
  * Database connection.
@@ -28,7 +28,7 @@ require_once __DIR__ . '/hosting_config.php';
  * non-root account created by the web entrypoint.
  */
 
-// app_env() is defined in hosting_config.php (loaded above).
+// app_env() is defined in app_env.php (loaded above).
 
 $host    = app_env('DB_HOST', 'profile_db');
 $port    = app_env('DB_PORT', '3306');

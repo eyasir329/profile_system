@@ -22,7 +22,7 @@ The project now matches the code running in production on InfinityFree.
   file). `hosting_config.php` (credentials) is git-ignored.
 - **Configuration**: settings are read through `app_env()` (environment,
   `$_ENV`, `$_SERVER`), because shared hosts disable `putenv()`. No change
-  under Docker. `src/includes/hosting_config.php` loads the optional file.
+  under Docker. `src/includes/app_env.php` loads the optional file.
 - **Japanese text**: migration `037_utf8mb4_japanese.sql` and
   `SET NAMES utf8mb4 COLLATE utf8mb4_general_ci` on every connection;
   password length counts characters; `first_name()` splits on the

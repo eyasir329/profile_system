@@ -119,7 +119,7 @@ who may open it and what it accepts.
 | Path | Holds |
 | --- | --- |
 | `includes/auth.php` | Session start and cookie flags, CSRF (`csrf_token`, `verify_csrf`), `require_login`, role checks (`require_admin`, `require_teacher`, `active_user_role`), session epoch, TOTP and backup codes. Also installs the error handlers and triggers housekeeping. |
-| `includes/hosting_config.php` | Loads `hosting_config.php` (shared hosting) and defines `app_env()`, which reads settings from the environment, `$_ENV` or `$_SERVER`, because free hosts disable `putenv()`. A no-op under Docker |
+| `includes/app_env.php` | Loads `hosting_config.php` (shared hosting) and defines `app_env()`, which reads settings from the environment, `$_ENV` or `$_SERVER`, because free hosts disable `putenv()`. A no-op under Docker |
 | `includes/db.php` | The PDO connection (env-driven, retries while MariaDB boots) and the site time zone, applied to PHP and to the connection |
 | `includes/url.php` | `url_for()` and named URL helpers, `current_user_id()`/`_name()` |
 | `includes/header.php`, `footer.php` | The page frame: `<head>`, top bar, role switcher, navigation per acting role; toasts and confirm dialog |

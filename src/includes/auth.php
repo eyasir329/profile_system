@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Load hosting-panel settings when running on shared hosting.
-require_once __DIR__ . '/hosting_config.php';
+require_once __DIR__ . '/app_env.php';
 
 // First, so a crash anywhere after this shows the error page, not a blank one.
 require_once __DIR__ . '/error_page.php';
